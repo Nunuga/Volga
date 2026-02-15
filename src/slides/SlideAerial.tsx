@@ -46,9 +46,10 @@ const CARD_SIDE = `min-w-[320px] lg:col-span-3 ${CARD_BASE}`
 
 const OVERLAY_GRADIENT_H = 'h-[270px]'
 
+// ✅ маска карты (поправил градиент, чтобы не было странного “провала”)
 const dissolveMaskStyle: React.CSSProperties = {
-  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 16%, transparent 100%)',
-  maskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 16%, transparent 100%)',
+  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
+  maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskSize: '100% 100%',
@@ -348,6 +349,9 @@ export default function SlideAerial() {
   const [selectedPotentialId, setSelectedPotentialId] = useState<string>(POTENTIAL_AREAS[0]?.id ?? 'P1')
   const [selectedMarkerId, setSelectedMarkerId] = useState<string>(MAP_MARKERS[0]?.id ?? 'beach')
 
+  // ✅ NEW: нижние карточки теперь “не мешают карте” (по умолчанию скрыты)
+  const [infoOpen, setInfoOpen] = useState(false)
+
   const vb = useMemo(() => {
     const parts = String(IMAGE_VIEWBOX).trim().split(/\s+/).map(Number)
     const minX = Number.isFinite(parts[0]) ? parts[0] : 0
@@ -587,8 +591,11 @@ export default function SlideAerial() {
     if (mode !== 'mezh') setActiveZone(null)
   }, [mode])
 
+  // ✅ удобная подпись режима для нижней кнопки
+  const modeLabel = mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : 'Общая схема'
+
   // ---------------------------
-  // ✅ DEFAULT (mode === 'none'): 3 карточки (первая шире)
+  // DEFAULT: 3 карточки
   // ---------------------------
   const DefaultInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
@@ -710,7 +717,7 @@ export default function SlideAerial() {
   )
 
   // ---------------------------
-  // ✅ SCHEME: 3 карточки (первая шире)
+  // SCHEME: 3 карточки
   // ---------------------------
   const SchemeInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
@@ -798,8 +805,6 @@ export default function SlideAerial() {
                   <div className="mt-1 text-sm font-semibold text-white/90">есть</div>
                 </div>
               </div>
-
-              {/* <div className="mt-auto pt-4 text-xs text-white/55">* цифры можно заменить на точные из ТЗ/документов</div> */}
             </div>
 
             <div className={CARD_SIDE}>
@@ -827,8 +832,6 @@ export default function SlideAerial() {
                   <div className="mt-1 text-xs text-white/65">2–3 сценария использования</div>
                 </div>
               </div>
-
-              {/* <div className="mt-auto pt-4 text-xs text-white/55">* дальше — инфраструктура и финмодель</div> */}
             </div>
           </div>
 
@@ -839,7 +842,7 @@ export default function SlideAerial() {
   )
 
   // ---------------------------
-  // ✅ MEZH: 3 карточки (первая шире)
+  // MEZH: 3 карточки
   // ---------------------------
   const MezhInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
@@ -871,10 +874,6 @@ export default function SlideAerial() {
                   <div className="text-[11px] text-white/60">Зон</div>
                   <div className="mt-1 text-sm font-semibold text-white/90">{MEZH_ZONES.length}</div>
                 </div>
-                {/* <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Точек</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">{MEZH_POINTS.length}</div>
-                </div> */}
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-[11px] text-white/60">Потенциалы</div>
                   <div className="mt-1 text-sm font-semibold text-white/90">{showPotential ? 'включены' : 'выключены'}</div>
@@ -1006,16 +1005,6 @@ export default function SlideAerial() {
                 Карта межевания
               </TopToggleButton>
 
-              {/* <TopToggleButton
-                active={mode === 'none'}
-                onClick={() => {
-                  setMode('none')
-                  setEditMode(false)
-                }}
-              >
-                Скрыть
-              </TopToggleButton> */}
-
               <div className="ml-2 flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-2 ring-1 ring-white/15">
                 <input
                   id="potential"
@@ -1053,9 +1042,6 @@ export default function SlideAerial() {
               }}
             >
               <img src={mapImg} alt="Аэроснимок участка" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-
-              {/* редактор (у тебя он был закомментирован — оставил как есть) */}
-              {/* {showEditor && (...)} */}
 
               <svg ref={svgRef} viewBox={IMAGE_VIEWBOX} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
                 <defs>
@@ -1349,7 +1335,7 @@ export default function SlideAerial() {
                   </g>
                 )}
 
-                {/* ✅ МАРКЕРЫ ЗОН: ТОЛЬКО В MEZH (кроме potential) */}
+                {/* ✅ МАРКЕРЫ ЗОН: ТОЛЬКО В MEZH */}
                 {mode === 'mezh' && !editMode && (
                   <g>
                     {MEZH_ZONES.map((z) => {
@@ -1423,7 +1409,7 @@ export default function SlideAerial() {
                       )
                     })()}
 
-                  {/* ✅ КАРТОЧКА: ТОЛЬКО В MEZH (7 пунктов) */}
+                  {/* ✅ КАРТОЧКА: ТОЛЬКО В MEZH */}
                   {mode === 'mezh' &&
                     !editMode &&
                     activeZone &&
@@ -1476,9 +1462,37 @@ export default function SlideAerial() {
             </div>
           </>
         )}
+
+        {/* ✅ NEW: Нижняя тонкая панель (не закрывает карту) */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-[80]">
+          <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
+            <button
+              onClick={deck.prev}
+              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
+            >
+              ← Назад
+            </button>
+
+            <button
+              onClick={() => setInfoOpen((v) => !v)}
+              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/90 ring-1 ring-white/18 transition hover:bg-white/10"
+              title="Показать/скрыть нижние карточки"
+            >
+              {infoOpen ? 'Скрыть карточки' : 'Показать карточки'} • {modeLabel}
+            </button>
+
+            <button
+              onClick={deck.next}
+              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
+            >
+              Далее →
+            </button>
+          </div>
+        </div>
       </div>
 
-      {infoCards}
+      {/* ✅ NEW: Карточки рендерятся только когда их откроют */}
+      {infoOpen ? infoCards : null}
     </div>
   )
 }
