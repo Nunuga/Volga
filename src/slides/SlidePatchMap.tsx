@@ -1,11 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import mapImg from '../assets/map1.png'
-import GlowButton from '../components/GlowButton'
-import { useDeck } from '../components/deckContext'
+import mapImg from '../assets/map3.png'
 import { IMAGE_VIEWBOX } from '../data/parcelPaths'
+import c1_1 from '../assets/c1-1.png'
+import c1_2 from '../assets/c1-2.png'
+import c1_3 from '../assets/c1-3.png'
+import c3_1 from '../assets/c3-1.png'
+import c3_2 from '../assets/c3-2.png'
+import c2_1 from '../assets/c2-1.jpeg'
+import c2_2 from '../assets/c2-2.jpeg'
+import c2_3 from '../assets/c2-3.jpeg'
 
-type FitBox = { left: number; top: number; width: number; height: number }
+
+type FitBox = { left: number; top: number; width: number; height: number; cw: number; ch: number }
 
 type PinVariant = 'default' | 'mine'
 
@@ -18,27 +25,13 @@ type Pin = {
   href?: string
   ctaLabel?: string
   variant?: PinVariant
-  cardOffset?: { x: number; y: number }
+  images?: string[]
 }
 
-type Layout = {
-  pin: Pin
-  cardX: number
-  cardY: number
-  cardW: number
-  cardH: number
-  side: 'left' | 'right'
-  attachX: number
-  attachY: number
-}
-
-const UI_TOP_MIN = 18
-const UI_TOP_DOCK_OFFSET = 72
-
-// ✅ маска как в SlideAerial
+// ✅ РАСТУШЁВКА ТОЛЬКО СПРАВА
 const dissolveMaskStyle: React.CSSProperties = {
-  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
-  maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
+  WebkitMaskImage: 'linear-gradient(to right, black 0%, black 78%, transparent 100%)',
+  maskImage: 'linear-gradient(to right, black 0%, black 78%, transparent 100%)',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskSize: '100% 100%',
@@ -47,22 +40,18 @@ const dissolveMaskStyle: React.CSSProperties = {
   maskPosition: 'center',
 }
 
-function safeParseViewBox(vb: string) {
-  const parts = String(vb).trim().split(/\s+/).map(Number)
-  const minX = Number.isFinite(parts[0]) ? parts[0] : 0
-  const minY = Number.isFinite(parts[1]) ? parts[1] : 0
-  const w = Number.isFinite(parts[2]) ? parts[2] : 1000
-  const h = Number.isFinite(parts[3]) ? parts[3] : 600
-  return { minX, minY, w, h, maxX: minX + w, maxY: minY + h }
-}
-
 /**
- * Премиум-маркер (с вариацией для "моей территории")
+ * ✅ Новый, более заметный маркер:
+ * - крупнее
+ * - ярче
+ * - другая форма
+ * - мощная пульсация/гало
  */
 function PremiumMarker({
   x,
   y,
   active,
+  selected,
   variant = 'default',
   onClick,
   onHover,
@@ -70,23 +59,31 @@ function PremiumMarker({
   x: number
   y: number
   active: boolean
+  selected: boolean
   variant?: PinVariant
   onClick?: () => void
   onHover?: (v: boolean) => void
 }) {
   const isMine = variant === 'mine'
+  const emphasized = isMine || active || selected
 
   const accent = isMine
-    ? 'rgba(255, 214, 91, 0.95)'
-    : active
-      ? 'rgba(241, 91, 91, 0.95)'
-      : 'rgba(91, 232, 241, 0.75)'
+    ? 'rgba(255, 214, 70, 0.98)'
+    : emphasized
+      ? 'rgba(255, 70, 90, 0.98)'
+      : 'rgba(90, 255, 245, 0.92)'
 
   const accentSoft = isMine
-    ? 'rgba(255, 214, 91, 0.38)'
-    : active
-      ? 'rgba(241, 91, 91, 0.45)'
-      : 'rgba(91, 232, 241, 0.35)'
+    ? 'rgba(255, 214, 70, 0.42)'
+    : emphasized
+      ? 'rgba(255, 70, 90, 0.55)'
+      : 'rgba(90, 255, 245, 0.34)'
+
+  // ✅ крупнее + “дыхание”
+  const scale = isMine ? 1.22 : selected ? 1.38 : active ? 1.24 : 1.14
+
+  const pulseFast = selected ? 0.95 : 1.25
+  const haloOpacity = selected ? 0.95 : active ? 0.8 : 0.55
 
   return (
     <g
@@ -100,313 +97,504 @@ function PremiumMarker({
       onPointerEnter={() => onHover?.(true)}
       onPointerLeave={() => onHover?.(false)}
     >
-      <circle r="2.8" fill="rgba(255,255,255,0.85)" />
-      <circle r="7.5" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8" />
-
-      <motion.circle
-        r={isMine ? 18 : 16}
-        fill="none"
-        stroke={accentSoft}
-        strokeWidth="2"
-        initial={{ opacity: 0.6, scale: 0.85 }}
-        animate={{ opacity: [0.55, 0.0], scale: [0.85, 1.75] }}
-        transition={{ duration: 1.55, repeat: Infinity, ease: 'easeOut' }}
-      />
-      <motion.circle
-        r={isMine ? 14 : 12}
-        fill="none"
-        stroke={accent}
-        strokeWidth="1.6"
-        initial={{ opacity: 0.35, scale: 0.9 }}
-        animate={{ opacity: [0.35, 0.0], scale: [0.9, 1.45] }}
-        transition={{ duration: 1.55, repeat: Infinity, ease: 'easeOut', delay: 0.55 }}
-      />
-
-      <ellipse cx="0" cy="22" rx="15" ry="6" fill="rgba(0,0,0,0.35)" />
-
-      <g filter={isMine ? 'url(#pinGlowMine)' : 'url(#pinGlow)'} opacity={0.99}>
-        <path
-          d="M0 0 C 11 0, 18 -8, 18 -18 C 18 -30, 8 -40, 0 -40 C -8 -40, -18 -30, -18 -18 C -18 -8, -11 0, 0 0 Z"
-          fill={isMine ? 'url(#pinBodyMine)' : 'url(#pinBody)'}
-        />
-        <circle cx="0" cy="-23" r="12.5" fill={isMine ? 'url(#pinHeadMine)' : 'url(#pinHead)'} filter="url(#pinShadow)" />
-        <circle cx="-4" cy="-28" r="4.2" fill="rgba(255,255,255,0.55)" />
-
-        <motion.circle
-          cx="0"
-          cy="-23"
-          r={isMine ? 22 : 20}
-          fill="none"
-          stroke={accent}
-          strokeWidth="2"
-          initial={false}
-          animate={{ opacity: active ? 1 : 0.55, scale: active ? 1.08 : 1 }}
-          transition={{ duration: 0.25 }}
-        />
-      </g>
-
-      {isMine && (
-        <g transform="translate(0 -56)">
-          <rect x={-58} y={-20} width={116} height={24} rx={12} fill="rgba(12,28,44,0.72)" stroke="rgba(255,255,255,0.16)" />
-          <text x={0} y={-4} textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize={12} fontWeight={900} fontFamily="ui-sans-serif">
-            МОЯ ТЕРРИТОРИЯ
-          </text>
-        </g>
-      )}
-    </g>
-  )
-}
-
-/**
- * Ножка (линия от точки к карточке)
- */
-function CalloutLeg({
-  fromX,
-  fromY,
-  toX,
-  toY,
-  variant = 'default',
-  active,
-}: {
-  fromX: number
-  fromY: number
-  toX: number
-  toY: number
-  variant?: PinVariant
-  active: boolean
-}) {
-  const isMine = variant === 'mine'
-  const stroke = isMine
-    ? 'rgba(255, 214, 91, 0.90)'
-    : active
-      ? 'rgba(241, 91, 91, 0.85)'
-      : 'rgba(91, 232, 241, 0.75)'
-  const strokeSoft = isMine
-    ? 'rgba(255, 214, 91, 0.25)'
-    : active
-      ? 'rgba(241, 91, 91, 0.22)'
-      : 'rgba(91, 232, 241, 0.20)'
-
-  const dx = toX - fromX
-  const c1x = fromX + Math.max(-120, Math.min(120, dx * 0.35))
-  const c1y = fromY - 18
-  const c2x = toX - Math.max(-120, Math.min(120, dx * 0.25))
-  const c2y = toY
-
-  const d = `M ${fromX} ${fromY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${toX} ${toY}`
-
-  return (
-    <g pointerEvents="none">
-      <path d={d} fill="none" stroke={strokeSoft} strokeWidth={8} strokeLinecap="round" opacity={0.9} />
-      <path d={d} fill="none" stroke={stroke} strokeWidth={2.2} strokeLinecap="round" opacity={0.95} />
-      <circle cx={toX} cy={toY} r={4.2} fill="rgba(10,22,34,0.82)" stroke={stroke} strokeWidth={2} />
-    </g>
-  )
-}
-
-/**
- * Крупная открытая карточка (премиальнее + больше текст)
- */
-function OpenMarkerCard({
-  x,
-  y,
-  width,
-  height,
-  title,
-  lines,
-  href,
-  ctaLabel = 'Открыть',
-}: {
-  x: number
-  y: number
-  width: number
-  height: number
-  title: string
-  lines: string[]
-  href?: string
-  ctaLabel?: string
-}) {
-  const topAccent =
-    'linear-gradient(90deg, rgba(165,241,91,0.0), rgba(165,241,91,0.82), rgba(91,232,241,0.72), rgba(165,241,91,0.0))'
-
-  const bg = 'linear-gradient(135deg, rgba(12,28,44,0.84), rgba(6,14,22,0.74))'
-  const ring = 'rgba(165,241,91,0.14)'
-
-  return (
-    <foreignObject x={x} y={y} width={width} height={height}>
-      <motion.div
-        xmlns="http://www.w3.org/1999/xhtml"
-        initial={{ opacity: 0, y: 12, scale: 0.988 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.988 }}
-        transition={{ duration: 0.22 }}
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          borderRadius: 28,
-          padding: 24,
-          color: 'white',
-          background: bg,
-          border: '1px solid rgba(255,255,255,0.18)',
-          backdropFilter: 'blur(18px)',
-          boxShadow: `0 30px 110px rgba(0,0,0,0.62), 0 0 0 1px ${ring} inset`,
-          pointerEvents: 'auto',
-          overflow: 'hidden',
-          fontFamily:
-            'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
-        }}
+      {/* отдельная группа: чтобы translate не масштабировался */}
+      <motion.g
+        transform={`scale(${scale})`}
+        initial={false}
+        animate={selected ? { y: [0, -1.2, 0] } : { y: 0 }}
+        transition={selected ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
       >
-        <div
-          style={{
-            position: 'absolute',
-            left: 18,
-            right: 18,
-            top: 12,
-            height: 4,
-            borderRadius: 999,
-            background: topAccent,
-            opacity: 0.95,
-          }}
-        />
+        {/* точка якоря */}
+        <circle r="3.1" fill="rgba(255,255,255,0.92)" />
+        <circle r="9.5" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" />
 
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(1200px 500px at 20% 10%, rgba(255,255,255,0.06), transparent 55%), radial-gradient(900px 400px at 80% 35%, rgba(165,241,91,0.06), transparent 60%)',
-            pointerEvents: 'none',
-          }}
-        />
+        {/* ✅ ПУЛЬС — три кольца, очень заметные */}
+        {emphasized && (
+          <>
+            <motion.circle
+              r={selected ? 30 : 26}
+              fill="none"
+              stroke={accentSoft}
+              strokeWidth="2.6"
+              initial={{ opacity: 0.85, scale: 0.55 }}
+              animate={{ opacity: [0.85, 0.0], scale: [0.55, 2.25] }}
+              transition={{ duration: pulseFast, repeat: Infinity, ease: 'easeOut' }}
+              style={{ mixBlendMode: 'screen' as any }}
+            />
+            <motion.circle
+              r={selected ? 24 : 21}
+              fill="none"
+              stroke={accent}
+              strokeWidth="2.2"
+              initial={{ opacity: 0.65, scale: 0.62 }}
+              animate={{ opacity: [0.65, 0.0], scale: [0.62, 1.95] }}
+              transition={{ duration: pulseFast, repeat: Infinity, ease: 'easeOut', delay: pulseFast * 0.28 }}
+              style={{ mixBlendMode: 'screen' as any }}
+            />
+            <motion.circle
+              r={selected ? 18 : 16}
+              fill="none"
+              stroke="rgba(255,255,255,0.75)"
+              strokeWidth="1.6"
+              initial={{ opacity: 0.35, scale: 0.78 }}
+              animate={{ opacity: [0.35, 0.0], scale: [0.78, 1.55] }}
+              transition={{ duration: pulseFast, repeat: Infinity, ease: 'easeOut', delay: pulseFast * 0.52 }}
+              style={{ mixBlendMode: 'screen' as any }}
+            />
+          </>
+        )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12, position: 'relative' }}>
-          <div>
-            <div
-              style={{
-                fontWeight: 950,
-                fontSize: 24,
-                letterSpacing: 0.2,
-                lineHeight: 1.12,
-                textShadow: '0 8px 30px rgba(0,0,0,0.45)',
-              }}
-            >
-              {title}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 14.5, color: 'rgba(255,255,255,0.72)', lineHeight: 1.35 }}>
-              Информация по точке
-            </div>
-          </div>
+        {/* тень */}
+        <ellipse cx="0" cy="34" rx="22" ry="9" fill="rgba(0,0,0,0.40)" />
 
-          <div
-            style={{
-              height: 1,
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.0), rgba(255,255,255,0.16), rgba(255,255,255,0.0))',
-              opacity: 0.9,
-              marginTop: 2,
-            }}
+        {/* ✅ тело пина (новая форма) */}
+        <g filter={isMine ? 'url(#pinGlowMine)' : 'url(#pinGlow)'} opacity={0.995}>
+          <path
+            d="
+              M 0 0
+              C 18 0, 32 -14, 32 -32
+              C 32 -54, 18 -72, 0 -72
+              C -18 -72, -32 -54, -32 -32
+              C -32 -14, -18 0, 0 0
+              Z
+            "
+            fill={isMine ? 'url(#pinBodyMine)' : 'url(#pinBody)'}
           />
 
-          <div style={{ flex: 1, overflow: 'auto', paddingRight: 8 }}>
-            <ul
-              style={{
-                margin: 0,
-                paddingLeft: 20,
-                opacity: 0.93,
-                fontSize: 16.5,
-                lineHeight: 1.72,
-                fontWeight: 650,
-                letterSpacing: 0.1,
-              }}
-            >
-              {lines.map((t) => (
-                <li key={t} style={{ marginBottom: 10 }}>
-                  <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.92)' }}>{t}</span>
-                </li>
-              ))}
-            </ul>
+          {/* “голова” */}
+          <circle cx="0" cy="-44" r="18" fill={isMine ? 'url(#pinHeadMine)' : 'url(#pinHead)'} filter="url(#pinShadow)" />
+
+          {/* бликовая линза */}
+          <circle cx="-6" cy="-52" r="5.6" fill="rgba(255,255,255,0.62)" />
+
+          {/* внутреннее ядро */}
+          <circle cx="0" cy="-44" r="7.2" fill="rgba(10,18,28,0.55)" />
+          <motion.circle
+            cx="0"
+            cy="-44"
+            r="9.2"
+            fill="none"
+            stroke={accent}
+            strokeWidth="2.2"
+            initial={false}
+            animate={{
+              opacity: emphasized ? haloOpacity : 0.45,
+              scale: selected ? [1.0, 1.12, 1.0] : active ? [1.0, 1.08, 1.0] : 1.0,
+            }}
+            transition={selected ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.22 }}
+            style={{ mixBlendMode: 'screen' as any }}
+          />
+
+          {/* внешний контур — “неоновая кромка” */}
+          <motion.path
+            d="
+              M 0 0
+              C 18 0, 32 -14, 32 -32
+              C 32 -54, 18 -72, 0 -72
+              C -18 -72, -32 -54, -32 -32
+              C -32 -14, -18 0, 0 0
+              Z
+            "
+            fill="none"
+            stroke={accent}
+            strokeWidth="2.6"
+            initial={false}
+            animate={{ opacity: emphasized ? 0.92 : 0.55 }}
+            transition={{ duration: 0.2 }}
+            style={{ mixBlendMode: 'screen' as any }}
+          />
+        </g>
+
+        {isMine && (
+          <g transform="translate(0 -92)">
+            <rect x={-78} y={-22} width={156} height={28} rx={14} fill="rgba(12,28,44,0.74)" stroke="rgba(255,255,255,0.18)" />
+            <text x={0} y={-3} textAnchor="middle" fill="rgba(255,255,255,0.94)" fontSize={13} fontWeight={900} fontFamily="ui-sans-serif">
+              МОЯ ТЕРРИТОРИЯ
+            </text>
+          </g>
+        )}
+      </motion.g>
+    </g>
+  )
+}
+
+/**
+ * ✅ Лайтбокс: увеличенное фото + листание
+ */
+function PhotoModal({
+  open,
+  title,
+  images,
+  startIndex,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  images: string[]
+  startIndex: number
+  onClose: () => void
+}) {
+  const [idx, setIdx] = useState(startIndex)
+
+  useEffect(() => {
+    if (!open) return
+    setIdx(startIndex)
+  }, [open, startIndex])
+
+  const hasImages = Array.isArray(images) && images.length > 0
+  const safeIdx = hasImages ? Math.max(0, Math.min(idx, images.length - 1)) : 0
+
+  const prev = useCallback(() => {
+    if (!hasImages) return
+    setIdx((v) => (v - 1 + images.length) % images.length)
+  }, [hasImages, images.length])
+
+  const next = useCallback(() => {
+    if (!hasImages) return
+    setIdx((v) => (v + 1) % images.length)
+  }, [hasImages, images.length])
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') prev()
+      if (e.key === 'ArrowRight') next()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose, prev, next])
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="absolute inset-0 z-[90] flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          style={{ pointerEvents: 'auto' }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onClose()
+          }}
+        >
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)' }} />
+
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.985 }}
+            transition={{ duration: 0.18 }}
+            className="relative z-[95] w-[min(1100px,92vw)] overflow-hidden rounded-[28px] ring-1 ring-white/15"
+            style={{
+              background: 'linear-gradient(135deg, rgba(12,28,44,0.92), rgba(6,14,22,0.84))',
+              boxShadow: '0 40px 140px rgba(0,0,0,0.65)',
+            }}
+          >
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0">
+                <div className="truncate text-[14px] font-extrabold text-white/90">{title}</div>
+                <div className="mt-1 text-[12px] text-white/55">
+                  фото: {safeIdx + 1}/{Math.max(1, images.length)}
+                </div>
+              </div>
+
+              <button
+                onClick={onClose}
+                className="rounded-2xl px-3 py-2 text-[13px] font-bold text-white/80 ring-1 ring-white/15 hover:bg-white/10"
+              >
+                Закрыть ✕
+              </button>
+            </div>
+
+            <div className="relative">
+              <div className="relative h-[min(70vh,640px)] w-full bg-black/30">
+                {hasImages ? <img src={images[safeIdx]} alt="" draggable={false} className="h-full w-full select-none object-contain" /> : null}
+              </div>
+
+              {hasImages && images.length > 1 && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      prev()
+                    }}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-2xl px-3 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      next()
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-2xl px-3 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
+                  >
+                    →
+                  </button>
+                </>
+              )}
+            </div>
+
+            {hasImages && images.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto px-5 py-4">
+                {images.slice(0, 12).map((src, i) => {
+                  const active = i === safeIdx
+                  return (
+                    <button
+                      key={src + i}
+                      onClick={() => setIdx(i)}
+                      className="h-[64px] w-[92px] flex-none overflow-hidden rounded-2xl ring-1"
+                      style={{ borderColor: active ? 'rgba(165,241,91,0.55)' : 'rgba(255,255,255,0.12)' }}
+                      title="Открыть фото"
+                    >
+                      <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+/**
+ * ✅ Карточка в правой панели
+ * ✅ Заголовок теперь без обрезки (полностью переносится)
+ */
+function PanelCard({
+  pin,
+  active,
+  selected,
+  activeIdx,
+  onSelect,
+  onSetActiveIdx,
+  onOpenModal,
+}: {
+  pin: Pin
+  active: boolean
+  selected: boolean
+  activeIdx: number
+  onSelect: () => void
+  onSetActiveIdx: (idx: number) => void
+  onOpenModal: (startIdx: number) => void
+}) {
+  const images = Array.isArray(pin.images) ? pin.images : []
+  const hasImages = images.length > 0
+  const safeIdx = hasImages ? Math.max(0, Math.min(activeIdx, images.length - 1)) : 0
+
+  const bg = selected
+    ? 'linear-gradient(135deg, rgba(12,28,44,0.96), rgba(6,14,22,0.88))'
+    : active
+      ? 'linear-gradient(135deg, rgba(12,28,44,0.92), rgba(6,14,22,0.84))'
+      : 'linear-gradient(135deg, rgba(12,28,44,0.80), rgba(6,14,22,0.72))'
+
+  const borderColor = selected ? 'rgba(165,241,91,0.36)' : active ? 'rgba(165,241,91,0.22)' : 'rgba(255,255,255,0.14)'
+
+  return (
+    <motion.div
+      layout
+      className="relative overflow-hidden rounded-[28px] p-5 ring-1"
+      style={{
+        background: bg,
+        borderColor,
+        boxShadow: selected
+          ? '0 40px 110px rgba(0,0,0,0.72)'
+          : active
+            ? '0 30px 90px rgba(0,0,0,0.62)'
+            : '0 18px 55px rgba(0,0,0,0.48)',
+        backdropFilter: 'blur(18px)',
+      }}
+      animate={{ scale: selected ? 1.01 : 1 }}
+      transition={{ duration: 0.16 }}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => onSelect()}
+    >
+      <div
+        className="pointer-events-none absolute left-5 right-5 top-3 h-[4px] rounded-full opacity-90"
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(165,241,91,0.0), rgba(165,241,91,0.82), rgba(90,255,245,0.72), rgba(165,241,91,0.0))',
+        }}
+      />
+
+      <div className="relative mt-2 flex gap-4">
+        {/* TEXT */}
+        <div className="min-w-0 flex-1">
+          <div
+            className="font-black text-white/95"
+            style={{
+              fontSize: 'clamp(18px, 1.15vw, 22px)',
+              lineHeight: 1.12,
+              textShadow: '0 10px 28px rgba(0,0,0,0.40)',
+              wordBreak: 'break-word',
+            }}
+            title={pin.title}
+          >
+            {pin.title}
           </div>
 
-          {href ? (
-            <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 10 }}>
+          <div className="mt-2 text-[13px] text-white/65">Информация по точке</div>
+
+          <div className="my-4 h-px w-full bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.16),rgba(255,255,255,0))]" />
+
+          <ul className="space-y-2 pl-5 text-[15px] font-semibold leading-[1.55] text-white/90">
+            {pin.lines.map((t) => (
+              <li key={t} style={{ wordBreak: 'break-word' }}>
+                {t}
+              </li>
+            ))}
+          </ul>
+
+          {pin.href ? (
+            <div className="mt-4 flex">
               <a
-                href={href}
+                href={pin.href}
                 target="_blank"
                 rel="noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  borderRadius: 18,
-                  padding: '12px 16px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.07)',
-                  color: 'rgba(255,255,255,0.94)',
-                  fontSize: 14,
-                  fontWeight: 900,
-                  letterSpacing: 0.2,
-                  textDecoration: 'none',
-                  boxShadow: '0 14px 40px rgba(0,0,0,0.28)',
-                }}
+                className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
+                style={{ boxShadow: '0 14px 40px rgba(0,0,0,0.28)' }}
+                onClick={(e) => e.stopPropagation()}
               >
-                {ctaLabel} ↗
+                {pin.ctaLabel ?? 'Открыть'} ↗
               </a>
             </div>
           ) : null}
         </div>
-      </motion.div>
-    </foreignObject>
+
+        {/* IMAGES */}
+        {hasImages && (
+          <div className="w-[300px] flex-none">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect()
+                onOpenModal(safeIdx)
+              }}
+              className="relative h-[210px] w-full overflow-hidden rounded-[22px] ring-1 ring-white/12"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                boxShadow: '0 18px 55px rgba(0,0,0,0.35)',
+              }}
+              title="Открыть фото"
+            >
+              <img src={images[safeIdx]} alt="" draggable={false} className="h-full w-full object-cover" />
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background:
+                    'linear-gradient(to top, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.0) 55%), radial-gradient(700px 260px at 20% 0%, rgba(165,241,91,0.14), transparent 60%)',
+                }}
+              />
+              <div className="absolute bottom-3 left-3 rounded-2xl bg-black/35 px-3 py-1 text-[12px] font-extrabold text-white/90 ring-1 ring-white/10">
+                открыть
+              </div>
+            </button>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {images.slice(0, 6).map((src, i) => {
+                const isActive = i === safeIdx
+                return (
+                  <button
+                    key={src + i}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelect()
+                      onSetActiveIdx(i)
+                      onOpenModal(i)
+                    }}
+                    className="h-[66px] overflow-hidden rounded-2xl ring-1"
+                    style={{
+                      borderColor: isActive ? 'rgba(165,241,91,0.55)' : 'rgba(255,255,255,0.12)',
+                      background: 'rgba(255,255,255,0.06)',
+                    }}
+                    title="Открыть фото"
+                  >
+                    <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-2 text-[12px] text-white/55">
+              фото: {safeIdx + 1}/{images.length}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: 'radial-gradient(800px 280px at 20% 110%, rgba(165,241,91,0.10), transparent 55%)',
+          }}
+        />
+      )}
+    </motion.div>
   )
 }
 
 /**
  * ДАННЫЕ
- * ✅ "Моя территория" — ТОЛЬКО МАРКЕР (без карточки)
  */
 const MY_TERRITORY: Pin = {
   id: 'my-territory',
-  x: 180,
-  y: 80,
+  x: 10,
+  y: -940,
   title: 'Реализуемая территория',
   lines: [''],
   variant: 'mine',
 }
 
 const COMPARE_PINS_FALLBACK: Pin[] = [
-  {
+  
+   {
     id: 'c1',
-    x: 1720,
-    y: 280,
-    title: 'Эксклюзив, Сосны, 1 линия р.Волга',
-    lines: ['Участок•870 сот.', 'Цена: 560 000 000 ₽'],
-    href: 'https://tver.cian.ru/sale/suburban/321858306/?mlSearchSessionGuid=45f661b051d5a56c0ced460df13e171f',
+    x: 180,
+    y: -700,
+    title: 'Коттеджный посёлок «Премиальный курорт Port Emm Zavidovo (Порт Эмм Завидово)»',
+    lines: ['Дома • от 193,25 м² до 399,1 м².', 'Цена: от 49 682 884 до 93 523 108 ₽'],
+    href: 'https://tver.cian.ru/kottedzhnyj-poselok-premialnyj-kurort-port-emm-zavidovo-port-ehmm-zavidovo-133126/?mlSearchSessionGuid=abcfb2126d70ea3c2500eec568e8cca8',
     ctaLabel: 'Открыть',
-    cardOffset: { x: -800, y: 400 },
+    images: [c2_1, c2_2,c2_3,],
   },
   {
     id: 'c2',
-    x: 2460,
-    y: 920,
-    title: 'Тверская область, Конаковский муниципальный округ, Отроковичи деревня,',
-    lines: ['40,88 сот', 'Цена: 65 000 000 ₽', 'Плюсы: зелёный район'],
-    href: 'https://tver.cian.ru/sale/suburban/314262139/?mlSearchSessionGuid=45f661b051d5a56c0ced460df13e171f',
+    x: 1320,
+    y: -320,
+    title: 'Коттеджный поселок «Екатериновка»',
+    lines: ['Участок • по запросу', 'Цена: по запросу'],
+    href: 'https://ekaterinovka.club/',
     ctaLabel: 'Открыть',
-    cardOffset: { x: 570, y: -20 },
+    images: [c1_1, c1_2,c1_3],
+  },
+ 
+  {
+    id: 'c3',
+    x: 2160,
+    y: 1460,
+    title: 'Коттеджный посёлок «Волжский Берег»',
+    lines: ['Дома • 102 м²', 'Цена: от 26 210 000 ₽'],
+    href: 'https://v-bereg.info/',
+    ctaLabel: 'Открыть',
+    images: [c3_1, c3_2],
   },
 ]
 
 export default function SlidePatchMap() {
-  const deck = useDeck()
-
   const stageRef = useRef<HTMLDivElement | null>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
 
   const [fit, setFit] = useState<FitBox | null>(null)
+
   const [hoverId, setHoverId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const vb = useMemo(() => safeParseViewBox(IMAGE_VIEWBOX), [])
-
-  // ✅ contain — картинка целиком, без растяжения
+  // ✅ contain: не растягиваем и не обрезаем
   const recalc = useCallback(() => {
     const stage = stageRef.current
     const img = imgRef.current
@@ -421,10 +609,11 @@ export default function SlidePatchMap() {
     const scale = Math.min(cw / nw, ch / nh)
     const width = nw * scale
     const height = nh * scale
-    const left = (cw - width) / 2
+
+    const left = 0
     const top = (ch - height) / 2
 
-    setFit({ left, top, width, height })
+    setFit({ left, top, width, height, cw, ch })
   }, [])
 
   useLayoutEffect(() => {
@@ -436,14 +625,9 @@ export default function SlidePatchMap() {
     return () => ro.disconnect()
   }, [recalc])
 
-  // ✅ док панели к top карты
-  const topControlsTop = useMemo(() => {
-    if (!fit) return 24
-    return Math.max(UI_TOP_MIN, fit.top - UI_TOP_DOCK_OFFSET)
-  }, [fit])
-
-  // ✅ данные сравнения: грузим сразу при открытии слайда (маркеры показываем по умолчанию)
   const [comparePins, setComparePins] = useState<Pin[]>(COMPARE_PINS_FALLBACK)
+
+  // API -> merge с fallback (чтобы c3 не потерялся)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -451,7 +635,16 @@ export default function SlidePatchMap() {
         const res = await fetch('/api/cians/compare', { method: 'GET' })
         if (!res.ok) return
         const json = (await res.json()) as { items?: Pin[] }
-        if (!cancelled && Array.isArray(json.items) && json.items.length) setComparePins(json.items)
+        if (cancelled) return
+
+        if (Array.isArray(json.items) && json.items.length) {
+          const map = new Map<string, Pin>()
+          json.items.forEach((p) => map.set(p.id, p))
+          COMPARE_PINS_FALLBACK.forEach((p) => {
+            if (!map.has(p.id)) map.set(p.id, p)
+          })
+          setComparePins(Array.from(map.values()))
+        }
       } catch {
         // fallback
       }
@@ -461,91 +654,97 @@ export default function SlidePatchMap() {
     }
   }, [])
 
-  // ✅ Пины показываются ВСЕГДА (по умолчанию)
-  const pins: Pin[] = useMemo(() => {
-    return [MY_TERRITORY, ...comparePins.filter((p) => p.id !== MY_TERRITORY.id)]
-  }, [comparePins])
+  const cards: Pin[] = useMemo(() => comparePins.filter((p) => p.id !== MY_TERRITORY.id), [comparePins])
+  const pins: Pin[] = useMemo(() => [MY_TERRITORY, ...cards], [cards])
 
-  const computeLayout = useCallback(
-    (pin: Pin): Layout => {
-      const margin = 18
+  const [cardIdx, setCardIdx] = useState<Record<string, number>>({})
+  const setIdxFor = useCallback((id: string, idx: number) => setCardIdx((m) => ({ ...m, [id]: idx })), [])
 
-      // карточки крупнее
-      const cardW = Math.max(460, Math.min(720, vb.w * 0.92))
-      const cardH = Math.max(290, Math.min(390, vb.h * 0.60))
+  const [modal, setModal] = useState<{ pinId: string; startIdx: number } | null>(null)
+  const openModal = useCallback((pinId: string, startIdx: number) => setModal({ pinId, startIdx }), [])
+  const closeModal = useCallback(() => setModal(null), [])
 
-      const BASE = { x: 54, y: -320 }
-      const co = pin.cardOffset ?? { x: 0, y: 0 }
+  const modalPin = useMemo(() => {
+    if (!modal) return null
+    return cards.find((p) => p.id === modal.pinId) ?? null
+  }, [modal, cards])
 
-      let cx = pin.x + BASE.x + co.x
-      let cy = pin.y + BASE.y + co.y
-      let side: 'left' | 'right' = 'left'
+  // ✅ панель шире (чуть-чуть), чтобы текст смотрелся лучше
+  const panelBox = useMemo(() => {
+    if (!fit) return null
+    const pad = 18
+    const w = Math.max(580, Math.min(880, Math.round(fit.cw * 0.42)))
+    const left = Math.max(pad, fit.cw - w - pad)
+    const top = Math.max(pad, fit.top + pad)
+    const height = Math.max(240, Math.min(fit.ch - pad * 2, fit.height - pad * 2))
+    return { left, top, width: w, height }
+  }, [fit])
 
-      if (cx + cardW > vb.maxX - margin) {
-        cx = pin.x - BASE.x - cardW + co.x
-        side = 'right'
-      }
+  // ✅ panel scroll ONLY (do not touch map / page)
+  const panelScrollRef = useRef<HTMLDivElement | null>(null)
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-      if (cy < vb.minY + margin) {
-        cy = pin.y + 44 + co.y
-      }
+  const scrollCardIntoPanelView = useCallback((id: string) => {
+    const container = panelScrollRef.current
+    const el = cardRefs.current[id]
+    if (!container || !el) return
 
-      cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
-      cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
+    const pad = 14
+    const cRect = container.getBoundingClientRect()
+    const eRect = el.getBoundingClientRect()
 
-      const attachY = cy + 74
-      const attachX = side === 'left' ? cx : cx + cardW
+    const topOk = eRect.top >= cRect.top + pad
+    const bottomOk = eRect.bottom <= cRect.bottom - pad
+    if (topOk && bottomOk) return
 
-      return { pin, cardX: cx, cardY: cy, cardW, cardH, side, attachX, attachY }
+    const deltaTop = eRect.top - (cRect.top + pad)
+    const deltaBottom = eRect.bottom - (cRect.bottom - pad)
+    const delta = deltaTop < 0 ? deltaTop : deltaBottom
+
+    container.scrollTo({
+      top: container.scrollTop + delta,
+      behavior: 'smooth',
+    })
+  }, [])
+
+  const selectById = useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      setHoverId(id)
+      requestAnimationFrame(() => scrollCardIntoPanelView(id))
     },
-    [vb],
+    [scrollCardIntoPanelView],
   )
 
-  const layouts = useMemo(() => pins.map((p) => computeLayout(p)), [pins, computeLayout])
-
-  // ✅ Моя территория — без карточки/ножки
-  const cardLayouts = useMemo(() => layouts.filter((l) => l.pin.variant !== 'mine'), [layouts])
-  const markerLayouts = layouts
+  const isCardActive = useCallback((id: string) => hoverId === id || selectedId === id, [hoverId, selectedId])
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-eco-gradient noise">
       <div ref={stageRef} className="absolute inset-0 overflow-hidden">
-        {/* ✅ ФОН — 1:1 как в SlideAerial */}
-        <img
-          src={mapImg}
-          alt=""
-          className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl opacity-35"
-          aria-hidden="true"
-          draggable={false}
-        />
-        <div className="absolute inset-0 bg-volga-night/55" />
-
-        {/* preload для naturalWidth/Height */}
-        <img ref={imgRef} src={mapImg} alt="" className="absolute pointer-events-none opacity-0" aria-hidden="true" onLoad={recalc} />
-
-        {/* ✅ верхняя панель — КНОПКИ "СРАВНЕНИЕ" НЕТ */}
-        <div
-          className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2"
-          style={{ top: topControlsTop, transition: 'top 200ms ease' }}
-        >
-          {/* <div className="glass relative rounded-[18px] px-3 py-2 shadow-soft ring-1 ring-white/14">
-            <div className="pointer-events-none absolute inset-x-6 top-1 h-[2px] rounded-full bg-gradient-to-r from-lime-200/0 via-lime-200/55 to-cyan-200/0 opacity-70" />
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={deck.prev}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/80 ring-1 ring-white/15 transition hover:bg-white/10"
-              >
-                ← Назад
-              </button>
-
-              <GlowButton onClick={deck.next}>Далее →</GlowButton>
-            </div>
-          </div> */}
+        {/* ✅ Подложка на пустые зоны сверху/снизу (карту НЕ растягиваем!) */}
+        <div className="absolute inset-0" style={dissolveMaskStyle}>
+          <img
+            src={mapImg}
+            alt=""
+            draggable={false}
+            className="absolute inset-0 h-full w-full scale-110 object-cover blur-3xl opacity-55"
+            aria-hidden="true"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(1200px 600px at 15% 20%, rgba(165,241,91,0.10), transparent 55%), linear-gradient(180deg, rgba(6,14,22,0.35), rgba(6,14,22,0.62))',
+            }}
+          />
         </div>
+
+        {/* preload natural sizes */}
+        <img ref={imgRef} src={mapImg} alt="" className="absolute pointer-events-none opacity-0" aria-hidden="true" onLoad={recalc} />
 
         {fit && (
           <>
-            {/* ✅ БАЗОВЫЙ СЛОЙ (маска) — карта целиком, без растяжения */}
+            {/* ✅ основной слой карты (contain, без обрезки) */}
             <div
               className="absolute z-10"
               style={{
@@ -560,15 +759,12 @@ export default function SlidePatchMap() {
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(165,241,91,0.10),transparent_62%)]" />
             </div>
 
-            {/* ✅ СЛОЙ МАРКЕРОВ/НОЖЕК/КАРТОЧЕК — без маски (ПОКАЗЫВАЕТСЯ СРАЗУ) */}
+            {/* markers layer */}
             <div
               className="pointer-events-auto absolute z-40"
-              style={{
-                left: fit.left,
-                top: fit.top,
-                width: fit.width,
-                height: fit.height,
-                overflow: 'visible',
+              style={{ left: fit.left, top: fit.top, width: fit.width, height: fit.height, overflow: 'visible' }}
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setHoverId(null)
               }}
             >
               <svg
@@ -579,90 +775,142 @@ export default function SlidePatchMap() {
                 onPointerLeave={() => setHoverId(null)}
               >
                 <defs>
-                  {/* дефолтные градиенты пина */}
-                  <radialGradient id="pinHead" cx="30%" cy="25%" r="80%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
-                    <stop offset="35%" stopColor="rgba(165,241,91,0.95)" />
-                    <stop offset="100%" stopColor="rgba(35,160,95,0.95)" />
+                  {/* ✅ Сделал градиенты поярче */}
+                  <radialGradient id="pinHead" cx="30%" cy="22%" r="85%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
+                    <stop offset="40%" stopColor="rgba(90,255,245,0.98)" />
+                    <stop offset="100%" stopColor="rgba(40,190,255,0.95)" />
                   </radialGradient>
                   <linearGradient id="pinBody" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(220,255,190,0.95)" />
-                    <stop offset="55%" stopColor="rgba(91,232,241,0.70)" />
-                    <stop offset="100%" stopColor="rgba(57,26,255,0.70)" />
+                    <stop offset="0%" stopColor="rgba(235,255,255,0.95)" />
+                    <stop offset="55%" stopColor="rgba(90,255,245,0.62)" />
+                    <stop offset="100%" stopColor="rgba(40,90,255,0.60)" />
                   </linearGradient>
 
-                  {/* "моя территория" — другие градиенты */}
-                  <radialGradient id="pinHeadMine" cx="30%" cy="25%" r="80%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.92)" />
-                    <stop offset="38%" stopColor="rgba(255,214,91,0.98)" />
-                    <stop offset="100%" stopColor="rgba(241,91,91,0.88)" />
+                  <radialGradient id="pinHeadMine" cx="30%" cy="22%" r="85%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
+                    <stop offset="45%" stopColor="rgba(255,214,70,0.99)" />
+                    <stop offset="100%" stopColor="rgba(255,110,70,0.92)" />
                   </radialGradient>
                   <linearGradient id="pinBodyMine" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255,245,210,0.95)" />
-                    <stop offset="55%" stopColor="rgba(255,214,91,0.62)" />
-                    <stop offset="100%" stopColor="rgba(241,91,91,0.62)" />
+                    <stop offset="0%" stopColor="rgba(255,250,220,0.96)" />
+                    <stop offset="55%" stopColor="rgba(255,214,70,0.66)" />
+                    <stop offset="100%" stopColor="rgba(255,80,110,0.60)" />
                   </linearGradient>
 
-                  <filter id="pinShadow" x="-70%" y="-70%" width="240%" height="240%">
-                    <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="rgba(0,0,0,0.35)" />
+                  <filter id="pinShadow" x="-90%" y="-90%" width="300%" height="300%">
+                    <feDropShadow dx="0" dy="12" stdDeviation="12" floodColor="rgba(0,0,0,0.38)" />
                   </filter>
 
-                  <filter id="pinGlow" x="-80%" y="-80%" width="260%" height="260%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="rgba(91,232,241,0.40)" />
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="rgba(165,241,91,0.25)" />
+                  {/* ✅ усиленный glow */}
+                  <filter id="pinGlow" x="-120%" y="-120%" width="340%" height="340%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="rgba(90,255,245,0.55)" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="14" floodColor="rgba(40,190,255,0.28)" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="18" floodColor="rgba(255,70,90,0.18)" />
                   </filter>
 
-                  <filter id="pinGlowMine" x="-90%" y="-90%" width="280%" height="280%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="rgba(255,214,91,0.40)" />
-                    <feDropShadow dx="0" dy="0" stdDeviation="12" floodColor="rgba(241,91,91,0.22)" />
+                  <filter id="pinGlowMine" x="-120%" y="-120%" width="340%" height="340%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="9" floodColor="rgba(255,214,70,0.55)" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="15" floodColor="rgba(255,120,70,0.26)" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="18" floodColor="rgba(255,70,90,0.16)" />
                   </filter>
                 </defs>
 
                 <AnimatePresence>
                   <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
-                    {/* 1) ножки (только для НЕ mine) */}
-                    {cardLayouts.map((l) => (
-                      <CalloutLeg
-                        key={`leg-${l.pin.id}`}
-                        fromX={l.pin.x}
-                        fromY={l.pin.y}
-                        toX={l.attachX}
-                        toY={l.attachY}
-                        variant={l.pin.variant ?? 'default'}
-                        active={hoverId === l.pin.id}
-                      />
-                    ))}
-
-                    {/* 2) маркеры (все, включая mine) */}
-                    {markerLayouts.map((l) => (
-                      <PremiumMarker
-                        key={`pin-${l.pin.id}`}
-                        x={l.pin.x}
-                        y={l.pin.y}
-                        variant={l.pin.variant ?? 'default'}
-                        active={hoverId === l.pin.id}
-                        onHover={(v) => setHoverId(v ? l.pin.id : null)}
-                      />
-                    ))}
-
-                    {/* 3) карточки (только для НЕ mine) */}
-                    {cardLayouts.map((l) => (
-                      <OpenMarkerCard
-                        key={`card-${l.pin.id}`}
-                        x={l.cardX}
-                        y={l.cardY}
-                        width={l.cardW}
-                        height={l.cardH}
-                        title={l.pin.title}
-                        lines={l.pin.lines}
-                        href={l.pin.href}
-                        ctaLabel={l.pin.ctaLabel}
-                      />
-                    ))}
+                    {pins.map((p) => {
+                      const isHovered = hoverId === p.id
+                      const isSelected = selectedId === p.id
+                      return (
+                        <PremiumMarker
+                          key={`pin-${p.id}`}
+                          x={p.x}
+                          y={p.y}
+                          variant={p.variant ?? 'default'}
+                          active={isHovered}
+                          selected={isSelected}
+                          onHover={(v) => setHoverId(v ? p.id : null)}
+                          onClick={() => {
+                            setSelectedId(p.id)
+                            setHoverId(p.id)
+                            if (p.id !== MY_TERRITORY.id) selectById(p.id)
+                          }}
+                        />
+                      )
+                    })}
                   </motion.g>
                 </AnimatePresence>
               </svg>
             </div>
+
+            {/* ✅ RIGHT PANEL */}
+            {panelBox && (
+              <div
+                className="absolute z-[70] pointer-events-auto"
+                style={{
+                  left: panelBox.left,
+                  top: panelBox.top,
+                  width: panelBox.width,
+                  height: panelBox.height,
+                }}
+              >
+                <div
+                  ref={panelScrollRef}
+                  className="h-full overflow-auto overscroll-contain rounded-[28px] p-3 ring-1 ring-white/12"
+                  style={{
+                    background: 'rgba(7,16,25,0.35)',
+                    backdropFilter: 'blur(14px)',
+                    boxShadow: '0 25px 90px rgba(0,0,0,0.45)',
+                  }}
+                >
+                  <div className="px-2 pb-3 pt-2">
+                    <div className="text-[13px] font-extrabold text-white/80">Сравнение объектов</div>
+                    <div className="mt-1 text-[12px] text-white/50">
+                      клик по карточке — выберет маркер • клик по фото — откроет галерею
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4 p-2">
+                    {cards.map((p) => {
+                      const active = isCardActive(p.id)
+                      const selected = selectedId === p.id
+                      return (
+                        <div
+                          key={`panel-${p.id}`}
+                          ref={(el) => {
+                            cardRefs.current[p.id] = el
+                          }}
+                          onMouseEnter={() => setHoverId(p.id)}
+                          onMouseLeave={() => setHoverId((cur) => (cur === p.id ? null : cur))}
+                        >
+                          <PanelCard
+                            pin={p}
+                            active={active}
+                            selected={selected}
+                            activeIdx={cardIdx[p.id] ?? 0}
+                            onSelect={() => {
+                              setSelectedId(p.id)
+                              setHoverId(p.id)
+                            }}
+                            onSetActiveIdx={(i) => setIdxFor(p.id, i)}
+                            onOpenModal={(startIdx) => openModal(p.id, startIdx)}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ✅ Photo modal */}
+            <PhotoModal
+              open={!!modal}
+              title={modalPin?.title ?? ''}
+              images={modalPin?.images ?? []}
+              startIndex={modal?.startIdx ?? 0}
+              onClose={closeModal}
+            />
           </>
         )}
       </div>
