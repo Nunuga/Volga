@@ -1709,8 +1709,8 @@ export default function SlideAerial() {
           className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2"
           style={{ top: topControlsTop, transition: 'top 200ms ease' }}
         >
-          <div className="glass relative rounded-[18px] px-3 py-2 shadow-soft ring-1 ring-white/14">
-            <div className="pointer-events-none absolute inset-x-6 top-1 h-[2px] rounded-full bg-gradient-to-r from-lime-200/0 via-lime-200/55 to-cyan-200/0 opacity-70" />
+          <div className="rounded-[0px] px-3 py-2 shadow-soft ">
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-[2px] rounded-full bg-gradient-to-r from-lime-200/0 via-lime-200/55 to-cyan-200/0 opacity-70" />
             <div className="flex flex-wrap items-center gap-2">
               <TopToggleButton
                 active={isScheme}
