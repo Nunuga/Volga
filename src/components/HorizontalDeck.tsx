@@ -2,7 +2,15 @@ import { Children, ReactNode, useEffect, useMemo, useRef, useState } from 'react
 import { motion } from 'framer-motion'
 import { DeckContext } from './deckContext'
 
-export default function HorizontalDeck({ children }: { children: ReactNode }) {
+export default function HorizontalDeck({
+  children,
+  hideDotsOn = [],     // ✅ индексы слайдов, где НЕ показывать dots
+  hideDots = false,    // ✅ полностью выключить dots
+}: {
+  children: ReactNode
+  hideDotsOn?: number[]
+  hideDots?: boolean
+}) {
   const count = Children.count(children)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [active, setActive] = useState(0)
@@ -14,7 +22,6 @@ export default function HorizontalDeck({ children }: { children: ReactNode }) {
     if (!el) return
 
     const onWheel = (e: WheelEvent) => {
-      // translate vertical wheel into horizontal scroll
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
       e.preventDefault()
       el.scrollBy({ left: e.deltaY * 1.2, behavior: 'smooth' })
@@ -45,6 +52,8 @@ export default function HorizontalDeck({ children }: { children: ReactNode }) {
   const next = () => go(Math.min(active + 1, count - 1))
   const prev = () => go(Math.max(active - 1, 0))
 
+  const hideNavDots = hideDots || hideDotsOn.includes(active) // ✅
+
   return (
     <DeckContext.Provider value={{ active, count, go, next, prev }}>
       <div className="relative h-full w-full">
@@ -67,31 +76,30 @@ export default function HorizontalDeck({ children }: { children: ReactNode }) {
         </div>
 
         {/* nav dots */}
-        <div className="pointer-events-none absolute bottom-6 left-1/2 z-50 -translate-x-1/2">
-          <div className="pointer-events-auto glass flex items-center gap-2 rounded-full px-3 py-2 shadow-soft">
-            {Array.from({ length: count }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => go(i)}
-                className="group relative h-3 w-3 rounded-full ring-1 ring-white/20"
-                aria-label={`Перейти к слайду ${i + 1}`}
-              >
-                <motion.span
-                  className="absolute inset-0 rounded-full"
-                  animate={{
-                    opacity: active === i ? 1 : 0.3,
-                    scale: active === i ? 1.0 : 0.85,
-                  }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    background:
-                      'radial-gradient(circle at 30% 30%, rgba(165,241,91,0.95), rgba(30,201,168,0.55))',
-                  }}
-                />
-              </button>
-            ))}
+        {!hideNavDots && (
+          <div className="pointer-events-none absolute bottom-6 left-1/2 z-50 -translate-x-1/2">
+            <div className="pointer-events-auto glass flex items-center gap-2 rounded-full px-3 py-2 shadow-soft">
+              {Array.from({ length: count }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => go(i)}
+                  className="group relative h-3 w-3 rounded-full ring-1 ring-white/20"
+                  aria-label={`Перейти к слайду ${i + 1}`}
+                >
+                  <motion.span
+                    className="absolute inset-0 rounded-full"
+                    animate={{ opacity: active === i ? 1 : 0.3, scale: active === i ? 1.0 : 0.85 }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      background:
+                        'radial-gradient(circle at 30% 30%, rgba(241, 189, 91, 0.95), rgba(30,201,168,0.55))',
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </DeckContext.Provider>
   )

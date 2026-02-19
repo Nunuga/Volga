@@ -17,45 +17,141 @@ import {
   PARCEL_PATH_DETAIL,
   PARCEL_STROKE,
   POTENTIAL_AREAS,
-  POTENTIAL_OFFSETS,
+  POTENTIAL_OFFSETS_MEZH,
+  POTENTIAL_OFFSETS_SCHEME,
 } from '../data/parcelPaths'
 
 type FitBox = { left: number; top: number; width: number; height: number }
 type OverlayMode = 'scheme' | 'mezh' | 'none'
-type EditLayer = 'mezh' | 'potential'
-type MarkerEditTarget = 'pin' | 'card'
-
+type EditLayer = 'mezh' | 'potential' | 'markerPin' | 'markerCard'
+type PotentialTarget = 'scheme' | 'mezh'
+const BOTTOM_BAR_SPACE_PX = 56
+const BOTTOM_BAR_SAFE = `calc(${BOTTOM_BAR_SPACE_PX}px + env(safe-area-inset-bottom))`
 const LOCATION = 'Тверская область, р-н. Калининский, с/п. Каблуковское, д. Заборовье'
 
 // ✅ панель сверху: докуем к верхней границе карты
 const UI_TOP_MIN = 18
 const UI_TOP_DOCK_OFFSET = 72
 
-// ✅ Премиальные карточки: 3 штуки, первая шире
-const ROW_CLASS =
-  'flex gap-4 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] lg:grid lg:grid-cols-12 lg:gap-4 lg:overflow-visible lg:[grid-auto-rows:1fr]'
+// ✅ ВАЖНО: поднимаем картинку и все слои, завязанные на fit.top
+const MAP_LIFT_PX = 120
 
+// ✅ Сетка карточек
+const ROW_CLASS_DEFAULT = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.55fr_repeat(2,1fr)] gap-3 lg:gap-4'
+const ROW_CLASS_SCHEME_POT = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.55fr_repeat(3,1fr)] gap-3 lg:gap-4'
+
+// ✅ Межевание: без горизонтального скролла — 1 ряд на md+ (main + 4 owners)
+const MEZH_ROW_CLASS = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.55fr_repeat(4,1fr)] gap-3 lg:gap-4'
+
+// ✅ База карточек (общая)
 const CARD_BASE =
   'relative overflow-hidden rounded-[34px] bg-gradient-to-br from-white/10 via-white/5 to-black/35 ' +
   'ring-1 ring-white/14 backdrop-blur-2xl shadow-soft ' +
   'transition will-change-transform hover:-translate-y-[2px] hover:ring-white/22 ' +
-  'h-full flex flex-col min-h-[300px] p-5 sm:p-6'
+  'h-full flex flex-col min-h-[240px] p-5 sm:p-6'
 
-const CARD_MAIN = `min-w-[420px] lg:col-span-6 ${CARD_BASE}`
-const CARD_SIDE = `min-w-[320px] lg:col-span-3 ${CARD_BASE}`
+// ✅ Компактная база карточек для MEZH (чтобы влезало в экран)
+const CARD_BASE_MEZH =
+  'relative overflow-hidden rounded-[30px] bg-gradient-to-br from-white/10 via-white/5 to-black/35 ' +
+  'ring-1 ring-white/14 backdrop-blur-2xl shadow-soft ' +
+  'transition will-change-transform hover:-translate-y-[2px] hover:ring-white/22 ' +
+  'h-full flex flex-col min-w-0 min-h-[190px] p-4 sm:p-5'
+
+// ✅ Main для MEZH: без min-w, чтобы не распирало (и без скролла)
+const CARD_MAIN_MEZH = `sm:col-span-2 md:col-span-1 ${CARD_BASE_MEZH}`
+
+// ✅ Side для MEZH: без min-w
+const CARD_SIDE_MEZH = `${CARD_BASE_MEZH}`
 
 const OVERLAY_GRADIENT_H = 'h-[270px]'
 
-// ✅ маска карты (поправил градиент, чтобы не было странного “провала”)
+// ✅ маска карты
 const dissolveMaskStyle: React.CSSProperties = {
-  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
-  maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
+  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 26%, black 44%, transparent 100%)',
+  maskImage: 'linear-gradient(to bottom, transparent 0%, black 26%, black 44%, transparent 100%)',
   WebkitMaskRepeat: 'no-repeat',
   maskRepeat: 'no-repeat',
   WebkitMaskSize: '100% 100%',
   maskSize: '100% 100%',
   WebkitMaskPosition: 'center',
   maskPosition: 'center',
+}
+
+/** Пытаемся привести rgb/rgba к нужной альфе (если не получается — возвращаем как есть) */
+function setRgbaAlpha(color: string, alpha: number) {
+  const c = String(color || '').trim()
+
+  const m1 = c.match(
+    /rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+))?\s*\)/i,
+  )
+  if (m1) {
+    const r = Number(m1[1])
+    const g = Number(m1[2])
+    const b = Number(m1[3])
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
+  const m2 = c.match(/^#([0-9a-f]{6})$/i)
+  if (m2) {
+    const hex = m2[1]
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+
+  return c
+}
+
+/**
+ * Цветной акцент для карточек (потенциалы / собственники)
+ */
+function ColorCardAccent({ colors }: { colors: string[] }) {
+  const a = colors[0] ?? 'rgba(165,241,91,1)'
+  const b = colors[1] ?? 'rgba(91,232,241,1)'
+  const c = colors[2]
+
+  return (
+    <>
+      <div
+        className="pointer-events-none absolute inset-0 opacity-75"
+        style={{
+          background: `linear-gradient(135deg, ${setRgbaAlpha(a, 0.18)}, ${setRgbaAlpha(b, 0.10)}, rgba(0,0,0,0.20))`,
+        }}
+      />
+
+      <div
+        className="pointer-events-none absolute left-6 right-6 top-12 h-[2px] rounded-full opacity-80"
+        style={{
+          background: `linear-gradient(to right, rgba(0,0,0,0), ${setRgbaAlpha(a, 0.8)}, ${setRgbaAlpha(
+            b,
+            0.75,
+          )}, rgba(0,0,0,0))`,
+        }}
+      />
+
+      <div
+        className="pointer-events-none absolute -top-24 left-1/2 h-56 w-[520px] -translate-x-1/2 rounded-full blur-2xl"
+        style={{
+          background: `radial-gradient(ellipse at center, ${setRgbaAlpha(a, 0.16)}, transparent 62%)`,
+        }}
+      />
+      <div
+        className="pointer-events-none absolute -right-24 top-1/3 h-60 w-60 rounded-full blur-2xl"
+        style={{
+          background: `radial-gradient(ellipse at center, ${setRgbaAlpha(b, 0.12)}, transparent 60%)`,
+        }}
+      />
+      {c && (
+        <div
+          className="pointer-events-none absolute -left-24 bottom-10 h-56 w-56 rounded-full blur-2xl"
+          style={{
+            background: `radial-gradient(ellipse at center, ${setRgbaAlpha(c, 0.10)}, transparent 60%)`,
+          }}
+        />
+      )}
+    </>
+  )
 }
 
 function CardAccent() {
@@ -92,8 +188,33 @@ function TopToggleButton({
   )
 }
 
+function SmallPillButton({
+  active,
+  children,
+  onClick,
+  title,
+}: {
+  active?: boolean
+  children: React.ReactNode
+  onClick: () => void
+  title?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={[
+        'rounded-2xl px-3 py-2 text-[12px] font-semibold transition ring-1',
+        active ? 'bg-white/15 text-white ring-white/25' : 'bg-white/5 text-white/80 ring-white/14 hover:bg-white/10',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  )
+}
+
 /**
- * Премиум-маркер: tip ровно в (x,y), пульсирующие rings, glow, активный halo.
+ * Премиум-маркер: tip ровно в (x,y)
  */
 function PremiumMarker({
   x,
@@ -188,6 +309,9 @@ function MarkerCard({
   onClose,
   editing,
   pointerSide = 'left',
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
 }: {
   x: number
   y: number
@@ -198,6 +322,9 @@ function MarkerCard({
   onClose: () => void
   editing: boolean
   pointerSide?: 'left' | 'right'
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerMove?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void
 }) {
   const arrowStyle: React.CSSProperties =
     pointerSide === 'right'
@@ -234,6 +361,9 @@ function MarkerCard({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         transition={{ duration: 0.2 }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         style={{
           position: 'relative',
           width: '100%',
@@ -248,6 +378,7 @@ function MarkerCard({
           cursor: editing ? 'grab' : 'default',
           pointerEvents: 'auto',
           overflow: 'hidden',
+          userSelect: editing ? 'none' : 'auto',
         }}
       >
         <div style={arrowStyle} />
@@ -271,7 +402,7 @@ function MarkerCard({
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 10, letterSpacing: 0.2 }}>{title}</div>
             <div style={{ maxHeight: height - 76, overflow: 'auto', paddingRight: 6 }}>
-              <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.92, fontSize: 14, lineHeight: 1.55 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.92, fontSize: 18, lineHeight: 1.55 }}>
                 {lines.map((t) => (
                   <li key={t} style={{ marginBottom: 4 }}>
                     {t}
@@ -323,8 +454,348 @@ function MarkerCard({
   )
 }
 
+// ------------------------------
+// ✅ OWNERS (Карта межевания) — подсветка зон
+// ------------------------------
+type OwnerId = 'owner1' | 'owner2' | 'owner3' | 'owner4'
+
+
+// 1) Тип для строки в карточке (то самое “Общая территория / Участок 1 ...”)
+type OwnerArea = {
+  label: string
+  zones: string[]           // ✅ только для подсветки на карте
+  value?: string            // ✅ сюда вручную вписываешь площадь/стоимость/любой текст
+  color?: string            // (опционально) цвет точки/чипа в карточке
+}
+
+type OwnerCardConfig = {
+  id: OwnerId
+  title: string
+  subtitle: string
+  areas: OwnerArea[]
+}
+
+// 2) OWNER_CARDS — тут ты вручную заполняешь территории по каждому собственнику
+export const OWNER_CARDS: OwnerCardConfig[] = [
+  {
+    id: 'owner1',
+    title: 'Собственник 1',
+    subtitle: '',
+    areas: [
+      { label: 'Общая', zones: ['A'], value: '130 100 кв.м.',  },
+      { label: 'Участок 1', zones: ['A'], value: '27 600 кв.м.' },
+      { label: 'Участок 2', zones: ['B'], value: '34 600 кв.м.' },
+      { label: 'Участок 3', zones: ['D'], value: '32 500 кв.м.' },
+      { label: 'Участок 4', zones: ['E'], value: '35 400 кв.м.' },
+    ],
+  },
+  {
+    id: 'owner2',
+    title: 'Собственник 2',
+    subtitle: '',
+    areas: [
+      { label: 'Общая', zones: ['C'], value: 'Уточняется' },
+      { label: 'Участок 1', zones: ['C'], value: 'Уточняется' },
+    ],
+  },
+  {
+    id: 'owner3',
+    title: 'Собственник 3',
+    subtitle: '',
+    areas: [
+      { label: 'Общая', zones: ['F'], value: '66 581 кв.м.' },
+      { label: 'Участок 1', zones: ['F'], value: '66 581 кв.м.' },
+    ],
+  },
+  {
+    id: 'owner4',
+    title: 'Собственник 4',
+    subtitle: '',
+    areas: [
+      { label: 'Общая', zones: ['J'], value: '97 880 кв.м.' },
+      { label: 'Участок 1', zones: ['J'], value: '28 210 кв.м.' },
+      { label: 'Участок 2', zones: ['K'], value: '30 900 кв.м.' },
+      { label: 'Участок 3', zones: ['H'], value: '38 770 кв.м.' },
+    ],
+  },
+]
+
+// ✅ 3) Автосбор зон для подсветки (из areas)
+const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)))
+
+export const OWNER_ZONE_MAP: Record<OwnerId, string[]> = OWNER_CARDS.reduce((acc, c) => {
+  acc[c.id] = uniq(c.areas.flatMap((a) => a.zones))
+  return acc
+}, {} as Record<OwnerId, string[]>)
+
+// ✅ 4) (опционально) Быстрый доступ: id -> config
+export const OWNER_BY_ID: Record<OwnerId, OwnerCardConfig> = OWNER_CARDS.reduce((acc, c) => {
+  acc[c.id] = c
+  return acc
+}, {} as Record<OwnerId, OwnerCardConfig>)
+
+
+
+function OwnerCard({
+  active,
+  title,
+  subtitle,
+  zones,          // <-- это уже OWNER_ZONE_MAP[ownerId]
+  areas,          // <-- новые “Общая территория / Участок 1 ...”
+  onClick,
+  className,
+  toneColors,
+  zoneColorMap,
+}: {
+  active: boolean
+  title: string
+  subtitle: string
+  zones: string[]
+  areas: OwnerArea[]
+  onClick: () => void
+  className?: string
+  toneColors?: string[]
+  zoneColorMap?: Record<string, string>
+}) {
+  const colors = toneColors?.length
+    ? toneColors
+    : ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
+
+  const getDotColor = (a: OwnerArea) => {
+    if (a.color) return a.color
+    const firstZone = a.zones?.[0]
+    return (firstZone && zoneColorMap?.[firstZone]) || 'rgba(255,255,255,0.55)'
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        className ?? CARD_SIDE_MEZH,
+        'text-left',
+        'cursor-pointer',
+        'focus:outline-none',
+        active ? 'ring-white/28 bg-white/12' : '',
+      ].join(' ')}
+      style={{ pointerEvents: 'auto' }}
+    >
+      
+<ColorCardAccent colors={colors} />
+      <div className="relative flex items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white truncate">{title}</div>
+          {!!subtitle && <div className="mt-1 text-xs text-white/60 truncate">{subtitle}</div>}
+        </div>
+
+        <div
+          className={[
+            'shrink-0 rounded-full px-3 py-1 text-xs font-semibold ring-1',
+            active ? 'bg-white/15 text-white ring-white/25' : 'bg-white/8 text-white/75 ring-white/14',
+          ].join(' ')}
+        >
+          {active ? 'выбран' : 'выбрать'}
+          
+        </div>
+      </div>
+
+      {/* список территорий “Общая территория / Участок 1 ...” */}
+      <div className="relative mt-3 rounded-2xl bg-white/6 p-0  min-w-0">
+      
+        <ul className="space-y-2 text-sm text-white/75">
+  {(areas?.length ? areas : [{ label: '—', zones: [], value: '' }]).map((a, idx) => (
+    <li key={idx} className="flex items-start gap-2">
+      <span
+        className="mt-[6px] h-2 w-2 shrink-0 rounded-full"
+        style={{
+          background:
+            a.color ||
+            (a.zones?.[0] && zoneColorMap?.[a.zones[0]]) ||
+            'rgba(255,255,255,0.55)',
+        }}
+      />
+      <div className="min-w-0">
+        <span className="text-white/85">{a.label}</span>
+        {a.value ? <span className="text-white/85">: {a.value}</span> : null}
+      </div>
+    </li>
+  ))}
+</ul>
+
+        {/* если хочешь — можно оставить “чипсы” зон снизу */}
+        {/* <div className="mt-3 flex flex-wrap gap-1.5">
+          {(zones.length ? zones : ['—']).map((z) => {
+            const col = zoneColorMap?.[z] ?? 'rgba(255,255,255,0.55)'
+            return (
+              <span
+                key={z}
+                className="inline-flex items-center gap-2 rounded-full bg-black/20 px-2.5 py-1 text-[12px] font-semibold text-white/85 ring-1 ring-white/10"
+              >
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: col }} />
+                {z}
+              </span>
+            )
+          })}
+        </div> */}
+      </div>
+
+      {/* <div className="relative mt-auto pt-3 text-xs text-white/55">
+        Нажми ещё раз — сбросить подсветку.
+      </div> */}
+    </button>
+  )
+}
+
+
+function PotentialInfoCard({
+  className,
+  areas,
+  colors,
+}: {
+  className: string
+  areas: Array<{ id: string; fill?: string; stroke?: string }>
+  colors: string[]
+}) {
+  const chips = areas.slice(0, 5)
+  const rest = Math.max(0, areas.length - chips.length)
+
+  return (
+    <div className={className}>
+      <ColorCardAccent colors={colors} />
+
+      <div className="relative flex items-center justify-between gap-3">
+        <div className="text-sm font-semibold text-white">Площадь территорий</div>
+        <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/16">
+          потенциал
+        </div>
+      </div>
+
+      {/* <div className="relative mt-3 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+        <div className="text-[11px] text-white/60">Что это</div>
+        <div className="mt-1 text-sm font-semibold text-white/90">
+          Зоны, которые можно рассмотреть как сценарии дополнения
+        </div>
+      </div> */}
+
+      <div className="relative mt-3">
+        {/* <div className="text-[11px] text-white/60">Зоны на карте</div> */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <ul className="mt-4 space-y-2 text-sm text-white/75">
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-500/80" />
+                  Общая территория: 
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+                  Участок 1: 
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+                  Участок 2: 
+                </li>
+                 <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+                  Участок 3: 
+                </li>
+              </ul>
+          {/* {chips.map((p) => (
+            <span
+              key={p.id}
+              className="inline-flex items-center gap-2 rounded-full bg-black/20 px-2.5 py-1 text-[12px] font-semibold text-white/85 ring-1 ring-white/10"
+            >
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ background: p.fill ?? p.stroke ?? 'rgba(255,255,255,0.55)' }}
+              />
+              {p.id}
+            </span>
+          ))} */}
+          {rest > 0 && (
+            <span className="inline-flex items-center rounded-full bg-white/8 px-2.5 py-1 text-[12px] font-semibold text-white/70 ring-1 ring-white/10">
+              +{rest}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* <div className="relative mt-auto pt-3 text-xs text-white/55">
+        * Включаются чекбоксом сверху. В редакторе: слой «Потенциалы».
+      </div> */}
+    </div>
+  )
+}
+
+function MainInfoCard({ className, compact = false }: { className: string; compact?: boolean }) {
+  const deck = useDeck()
+
+  return (
+    <div className={className}>
+      <CardAccent />
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          {/* <div className="text-xs text-white/60">Локация</div> */}
+          <div className={['mt-1 font-semibold tracking-tight text-white', compact ? 'text-lg' : 'text-xl'].join(' ')}>
+            Участок в природном окружении
+          </div>
+          <p className={['mt-2 leading-relaxed text-white/70', compact ? 'text-xs' : 'text-sm'].join(' ')}>
+            Адрес: <span className="text-white/90">{LOCATION}</span>
+          </p>
+        </div>
+
+        <div className="shrink-0 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/12">
+          <div className="text-[11px] text-white/60">Слайд</div>
+          <div className="text-sm font-semibold text-white/90">2 / 5</div>
+        </div>
+      </div>
+
+      {!compact ? (
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Общая площадь</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">~ 31 ГА</div>
+          </div>
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Время от Москвы</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">1 час 20 минут</div>
+          </div>
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Время от центра Твери</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">20 минут</div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Общая площадь</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">~ 31 ГА</div>
+          </div>
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Время от Москвы</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">1 час 20 минут</div>
+          </div>
+          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+            <div className="text-[11px] text-white/60">Время от центра Твери</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">20 минут</div>
+          </div>
+        </div>
+      )}
+
+      {/* <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-3">
+        <GlowButton onClick={deck.prev}>← Назад</GlowButton>
+        <button
+          onClick={deck.next}
+          className="rounded-2xl px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/22 transition hover:bg-white/10"
+        >
+          Далее →
+        </button>
+      </div> */}
+    </div>
+  )
+}
+
 export default function SlideAerial() {
   const deck = useDeck()
+  const POTENTIAL_MARKER_ID = 'view' as const
 
   const stageRef = useRef<HTMLDivElement | null>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
@@ -338,19 +809,29 @@ export default function SlideAerial() {
   const [activeZone, setActiveZone] = useState<string | null>(null)
 
   const [showPotential, setShowPotential] = useState(false)
-  const canShowPotentialNow = showPotential && mode !== 'none'
 
+  // ✅ ВАЖНО: потенциалы можно показывать даже когда mode === 'none'
+  const canShowPotentialNow = showPotential
+
+  // ✅ редактор UI
+  const [editorOpen, setEditorOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editLayer, setEditLayer] = useState<EditLayer>('mezh')
   const [moveAll, setMoveAll] = useState(false)
   const [step, setStep] = useState(5)
 
+  // ✅ цель редактирования потенциалов (разные наборы координат)
+  const [potentialTarget, setPotentialTarget] = useState<PotentialTarget>('scheme')
+
   const [selectedZoneId, setSelectedZoneId] = useState<string>(MEZH_ZONES[0]?.id ?? 'A')
   const [selectedPotentialId, setSelectedPotentialId] = useState<string>(POTENTIAL_AREAS[0]?.id ?? 'P1')
   const [selectedMarkerId, setSelectedMarkerId] = useState<string>(MAP_MARKERS[0]?.id ?? 'beach')
 
-  // ✅ NEW: нижние карточки теперь “не мешают карте” (по умолчанию скрыты)
+  // ✅ нижние карточки
   const [infoOpen, setInfoOpen] = useState(false)
+
+  // ✅ выбранный собственник (для подсветки зон)
+  const [activeOwner, setActiveOwner] = useState<OwnerId | null>(null)
 
   const vb = useMemo(() => {
     const parts = String(IMAGE_VIEWBOX).trim().split(/\s+/).map(Number)
@@ -359,6 +840,51 @@ export default function SlideAerial() {
     const w = Number.isFinite(parts[2]) ? parts[2] : 1000
     const h = Number.isFinite(parts[3]) ? parts[3] : 600
     return { minX, minY, w, h, maxX: minX + w, maxY: minY + h }
+  }, [])
+
+  const activeOwnerSet = useMemo(() => {
+    if (!activeOwner) return null
+    return new Set(OWNER_ZONE_MAP[activeOwner] ?? [])
+  }, [activeOwner])
+
+  const mezhZoneColorMap = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const z of MEZH_ZONES) out[z.id] = z.fill ?? z.stroke ?? 'rgba(255,255,255,0.55)'
+    return out
+  }, [])
+
+  const ownerToneColors = useMemo(() => {
+    const zoneById = new Map(MEZH_ZONES.map((z) => [z.id, z] as const))
+    const pick = (ids: string[]) => {
+      const colors: string[] = []
+      for (const id of ids) {
+        const z = zoneById.get(id)
+        if (!z) continue
+        if (z.fill) colors.push(z.fill)
+        if (z.stroke) colors.push(z.stroke)
+      }
+      const uniq = Array.from(new Set(colors)).filter(Boolean)
+      if (uniq.length >= 2) return uniq.slice(0, 3)
+      return ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
+    }
+
+    return {
+      owner1: pick(OWNER_ZONE_MAP.owner1),
+      owner2: pick(OWNER_ZONE_MAP.owner2),
+      owner3: pick(OWNER_ZONE_MAP.owner3),
+      owner4: pick(OWNER_ZONE_MAP.owner4),
+    } satisfies Record<OwnerId, string[]>
+  }, [])
+
+  const potentialToneColors = useMemo(() => {
+    const colors: string[] = []
+    for (const p of POTENTIAL_AREAS) {
+      if (p.fill) colors.push(p.fill)
+      if (p.stroke) colors.push(p.stroke)
+    }
+    const uniq = Array.from(new Set(colors)).filter(Boolean)
+    if (uniq.length >= 2) return uniq.slice(0, 3)
+    return ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
   }, [])
 
   // ---- offsets: MEZH ----
@@ -379,23 +905,37 @@ export default function SlideAerial() {
     buildMezhOffsetsFromFile(),
   )
 
-  // ---- offsets: POTENTIAL ----
-  const buildPotentialOffsetsFromFile = useCallback(() => {
+  // ---- offsets: POTENTIAL (scheme vs mezh) ----
+  const buildPotentialOffsetsFromFile = useCallback((target: PotentialTarget) => {
     const obj: Record<string, { x: number; y: number; scale?: number }> = {}
+    const map =
+      target === 'mezh'
+        ? (POTENTIAL_OFFSETS_MEZH as Record<string, { x: number; y: number; scale?: number }>)
+        : (POTENTIAL_OFFSETS_SCHEME as Record<string, { x: number; y: number; scale?: number }>)
+
     for (const p of POTENTIAL_AREAS) {
-      const fromMap = POTENTIAL_OFFSETS?.[p.id]
+      const fromMap = map?.[p.id]
       obj[p.id] = {
-        x: fromMap?.x ?? p.transform?.x ?? 0,
-        y: fromMap?.y ?? p.transform?.y ?? 0,
-        scale: p.transform?.scale,
+        x: fromMap?.x ?? 0,
+        y: fromMap?.y ?? 0,
+        scale: fromMap?.scale ?? p.transform?.scale,
       }
     }
     return obj
   }, [])
 
-  const [potentialOffsets, setPotentialOffsets] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
-    buildPotentialOffsetsFromFile(),
-  )
+  const [potentialOffsetsScheme, setPotentialOffsetsScheme] = useState<
+    Record<string, { x: number; y: number; scale?: number }>
+  >(() => buildPotentialOffsetsFromFile('scheme'))
+
+  const [potentialOffsetsMezh, setPotentialOffsetsMezh] = useState<
+    Record<string, { x: number; y: number; scale?: number }>
+  >(() => buildPotentialOffsetsFromFile('mezh'))
+
+  // ✅ mode==='none' трактуем как scheme для потенциалов (визуально)
+  const activePotentialOffsets = useMemo(() => {
+    return mode === 'mezh' ? potentialOffsetsMezh : potentialOffsetsScheme
+  }, [mode, potentialOffsetsMezh, potentialOffsetsScheme])
 
   // ---- offsets: MARKERS (pin + card) ----
   const buildMarkerOffsetsFromFile = useCallback(() => {
@@ -408,7 +948,9 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { x: number; y: number }>>(() => buildMarkerOffsetsFromFile())
+  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { x: number; y: number }>>(() =>
+    buildMarkerOffsetsFromFile(),
+  )
 
   const buildMarkerCardOffsetsFromFile = useCallback(() => {
     const obj: Record<string, { x: number; y: number }> = {}
@@ -440,7 +982,9 @@ export default function SlideAerial() {
     const width = nw * scale
     const height = nh * scale
     const left = (cw - width) / 2
-    const top = (ch - height) / 2
+
+    const topRaw = (ch - height) / 2 - MAP_LIFT_PX
+    const top = Math.max(-height * 0.15, topRaw)
 
     setFit({ left, top, width, height })
   }, [])
@@ -457,7 +1001,6 @@ export default function SlideAerial() {
   const isScheme = mode === 'scheme'
   const isMezh = mode === 'mezh'
 
-  // ✅ панель сверху привязана к top карты
   const topControlsTop = useMemo(() => {
     if (!fit) return 24
     return Math.max(UI_TOP_MIN, fit.top - UI_TOP_DOCK_OFFSET)
@@ -466,8 +1009,7 @@ export default function SlideAerial() {
   const activeMarkerData = useMemo(() => MAP_MARKERS.find((m) => m.id === activeMarker) ?? null, [activeMarker])
   const activeZoneCard = useMemo(() => (activeZone ? MEZH_ZONE_CARDS[activeZone] ?? null : null), [activeZone])
 
-  const clientToSvg = useCallback((clientX: number, clientY: number) => {
-    const svg = svgRef.current
+  const clientToSvgFrom = useCallback((svg: SVGSVGElement | null, clientX: number, clientY: number) => {
     if (!svg) return null
     const pt = svg.createSVGPoint()
     pt.x = clientX
@@ -478,7 +1020,6 @@ export default function SlideAerial() {
     return { x: p.x, y: p.y }
   }, [])
 
-  // ✅ центр зоны: label.x/y + offsets (+ scale)
   const getZoneCenter = useCallback(
     (z: (typeof MEZH_ZONES)[number]) => {
       const off = zoneOffsets[z.id] ?? { x: 0, y: 0, scale: 1 }
@@ -489,6 +1030,17 @@ export default function SlideAerial() {
     },
     [zoneOffsets],
   )
+
+  const visibleMarkers = useMemo(() => {
+    return MAP_MARKERS.filter((m) => {
+      // ✅ view-маркер (потенциалы) виден даже при mode='none'
+      if (m.id === POTENTIAL_MARKER_ID) return canShowPotentialNow
+      // остальные маркеры — только на "scheme"
+      return mode === 'scheme'
+    })
+  }, [mode, canShowPotentialNow])
+
+  const isMarkerVisible = useCallback((id: string) => visibleMarkers.some((m) => m.id === id), [visibleMarkers])
 
   // ---- apply delta ----
   const applyDelta = useCallback(
@@ -510,29 +1062,70 @@ export default function SlideAerial() {
         return
       }
 
-      setPotentialOffsets((prev) => {
+      if (editLayer === 'potential') {
+        // mode='none' -> редактируем scheme offsets
+        const setOffsets = mode === 'mezh' ? setPotentialOffsetsMezh : setPotentialOffsetsScheme
+        setOffsets((prev) => {
+          const next = { ...prev }
+          if (moveAll) {
+            for (const k of Object.keys(next)) {
+              next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
+            }
+          } else {
+            const id = selectedPotentialId
+            const cur = next[id] ?? { x: 0, y: 0 }
+            next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
+          }
+          return next
+        })
+        return
+      }
+
+      if (editLayer === 'markerPin') {
+        setMarkerOffsets((prev) => {
+          const next = { ...prev }
+          if (moveAll) {
+            for (const k of Object.keys(next)) next[k] = { x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
+          } else {
+            const id = selectedMarkerId
+            const cur = next[id] ?? { x: 0, y: 0 }
+            next[id] = { x: cur.x + dx, y: cur.y + dy }
+          }
+          return next
+        })
+        return
+      }
+
+      // markerCard
+      setMarkerCardOffsets((prev) => {
         const next = { ...prev }
         if (moveAll) {
-          for (const k of Object.keys(next)) {
-            next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
-          }
+          for (const k of Object.keys(next)) next[k] = { x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
         } else {
-          const id = selectedPotentialId
+          const id = selectedMarkerId
           const cur = next[id] ?? { x: 0, y: 0 }
-          next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
+          next[id] = { x: cur.x + dx, y: cur.y + dy }
         }
         return next
       })
     },
-    [editLayer, moveAll, selectedZoneId, selectedPotentialId],
+    [editLayer, moveAll, selectedZoneId, selectedPotentialId, selectedMarkerId, mode, setPotentialOffsetsMezh, setPotentialOffsetsScheme],
   )
 
   // ---- keyboard ----
   useEffect(() => {
     if (!editMode) return
-    if (editLayer === 'potential' && !canShowPotentialNow) return
+
     if (editLayer === 'mezh' && mode !== 'mezh') return
-    if (editLayer === 'potential' && mode === 'none') return
+
+    if (editLayer === 'potential') {
+      if (!canShowPotentialNow) return
+      // ✅ scheme-потенциалы можно двигать и в mode='none'
+      if (potentialTarget === 'scheme' && !(mode === 'scheme' || mode === 'none')) return
+      if (potentialTarget === 'mezh' && mode !== 'mezh') return
+    }
+
+    if ((editLayer === 'markerPin' || editLayer === 'markerCard') && mode !== 'scheme') return
 
     const onKeyDown = (e: KeyboardEvent) => {
       const mult = e.shiftKey ? 5 : 1
@@ -557,100 +1150,333 @@ export default function SlideAerial() {
 
     window.addEventListener('keydown', onKeyDown, { passive: false })
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [editMode, editLayer, mode, canShowPotentialNow, step, applyDelta])
+  }, [editMode, editLayer, mode, canShowPotentialNow, step, applyDelta, potentialTarget])
 
+  // ---- drag state for editor ----
   const dragRef = useRef<{
     dragging: boolean
     kind: EditLayer
     startPt: { x: number; y: number }
     startZoneOffsets: Record<string, { x: number; y: number; scale?: number }>
-    startPotentialOffsets: Record<string, { x: number; y: number; scale?: number }>
+    startPotentialOffsetsScheme: Record<string, { x: number; y: number; scale?: number }>
+    startPotentialOffsetsMezh: Record<string, { x: number; y: number; scale?: number }>
+    startMarkerOffsets: Record<string, { x: number; y: number }>
+    startMarkerCardOffsets: Record<string, { x: number; y: number }>
     targetId: string
+    potentialTarget: PotentialTarget
   } | null>(null)
 
-  const showEditor = mode === 'mezh' || (mode === 'scheme' && showPotential)
+  // auto-fix layer when open editor
+  useEffect(() => {
+    if (!editorOpen) {
+      setEditMode(false)
+      return
+    }
+    if (mode === 'mezh') setEditLayer('mezh')
+    if (mode === 'scheme') setEditLayer('markerPin')
+    if (mode === 'none') setEditLayer(showPotential ? 'potential' : 'markerPin')
+  }, [editorOpen, mode, showPotential])
 
   useEffect(() => {
     if (!showPotential && editLayer === 'potential') {
       setEditMode(false)
-      setEditLayer('mezh')
+      setEditLayer(mode === 'scheme' ? 'markerPin' : 'mezh')
     }
-  }, [showPotential, editLayer])
+  }, [showPotential, editLayer, mode])
 
   useEffect(() => {
-    if (showPotential && mode !== 'none' && editLayer === 'mezh' && mode === 'scheme') {
-      setEditLayer('potential')
+    if (!canShowPotentialNow && activeMarker === POTENTIAL_MARKER_ID) {
+      setActiveMarker(null)
     }
-  }, [showPotential, mode, editLayer])
+  }, [canShowPotentialNow, activeMarker])
+
+  // ✅ правила активности при смене режимов
+  useEffect(() => {
+    if (mode === 'none') {
+      setActiveZone(null)
+      setActiveOwner(null)
+
+      if (!canShowPotentialNow) {
+        setActiveMarker(null)
+        return
+      }
+
+      if (activeMarker && activeMarker !== POTENTIAL_MARKER_ID) setActiveMarker(null)
+      return
+    }
+
+    if (mode === 'mezh') {
+      if (activeMarker && activeMarker !== POTENTIAL_MARKER_ID) setActiveMarker(null)
+      if (activeMarker === POTENTIAL_MARKER_ID && !canShowPotentialNow) setActiveMarker(null)
+    }
+
+    if (mode !== 'mezh') {
+      setActiveOwner(null)
+      setActiveZone(null)
+    }
+  }, [mode, activeMarker, canShowPotentialNow])
 
   useEffect(() => {
-    if (mode !== 'scheme') setActiveMarker(null)
+    if (!infoOpen) setActiveOwner(null)
+  }, [infoOpen])
+
+  // ✅ синхронизируем target потенциалов с режимом (mode='none' -> scheme)
+  useEffect(() => {
+    if (mode === 'mezh') setPotentialTarget('mezh')
+    else setPotentialTarget('scheme')
   }, [mode])
 
-  useEffect(() => {
-    if (mode !== 'mezh') setActiveZone(null)
-  }, [mode])
+  const modeLabel =
+    mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : showPotential ? 'Потенциалы' : 'Общая информация'
 
-  // ✅ удобная подпись режима для нижней кнопки
-  const modeLabel = mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : 'Общая схема'
+  // ---- editor availability ----
+  const canEditLayer = useMemo(() => {
+    if (!editorOpen) return false
+    if (editLayer === 'mezh') return mode === 'mezh'
+    if (editLayer === 'potential') {
+      if (!canShowPotentialNow) return false
+      return (potentialTarget === 'scheme' && (mode === 'scheme' || mode === 'none')) || (potentialTarget === 'mezh' && mode === 'mezh')
+    }
+    if (editLayer === 'markerPin' || editLayer === 'markerCard') return mode === 'scheme'
+    return false
+  }, [editorOpen, editLayer, mode, canShowPotentialNow, potentialTarget])
+
+  const markersLayerPassThrough = useMemo(() => {
+    if (!editorOpen || !editMode) return false
+    if (!canEditLayer) return false
+    return editLayer === 'mezh' || editLayer === 'potential'
+  }, [editorOpen, editMode, canEditLayer, editLayer])
+
+  // ---- JSON export ----
+  const offsetsDump = useMemo(() => {
+    return JSON.stringify(
+      {
+        MEZH_ZONE_OFFSETS: zoneOffsets,
+        POTENTIAL_OFFSETS_SCHEME: potentialOffsetsScheme,
+        POTENTIAL_OFFSETS_MEZH: potentialOffsetsMezh,
+        MAP_MARKER_OFFSETS: markerOffsets,
+        MARKER_CARD_OFFSETS: markerCardOffsets,
+      },
+      null,
+      2,
+    )
+  }, [zoneOffsets, potentialOffsetsScheme, potentialOffsetsMezh, markerOffsets, markerCardOffsets])
+
+  const copyDump = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(offsetsDump)
+    } catch {
+      // ignore
+    }
+  }, [offsetsDump])
+
+  // ---- drag helpers ----
+  const beginDrag = useCallback(
+    (kind: EditLayer, targetId: string, pt: { x: number; y: number }) => {
+      dragRef.current = {
+        dragging: true,
+        kind,
+        startPt: pt,
+        startZoneOffsets: JSON.parse(JSON.stringify(zoneOffsets)),
+        startPotentialOffsetsScheme: JSON.parse(JSON.stringify(potentialOffsetsScheme)),
+        startPotentialOffsetsMezh: JSON.parse(JSON.stringify(potentialOffsetsMezh)),
+        startMarkerOffsets: JSON.parse(JSON.stringify(markerOffsets)),
+        startMarkerCardOffsets: JSON.parse(JSON.stringify(markerCardOffsets)),
+        targetId,
+        potentialTarget: mode === 'mezh' ? 'mezh' : 'scheme',
+      }
+    },
+    [zoneOffsets, potentialOffsetsScheme, potentialOffsetsMezh, markerOffsets, markerCardOffsets, mode],
+  )
+
+  const moveDrag = useCallback(
+    (pt: { x: number; y: number }) => {
+      const dr = dragRef.current
+      if (!dr?.dragging) return
+      const dx = pt.x - dr.startPt.x
+      const dy = pt.y - dr.startPt.y
+
+      if (dr.kind === 'mezh') {
+        setZoneOffsets(() => {
+          const base = dr.startZoneOffsets
+          const next = { ...base }
+          if (moveAll) {
+            for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
+          } else {
+            const id = dr.targetId
+            const cur = base[id] ?? { x: 0, y: 0 }
+            next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
+          }
+          return next
+        })
+        return
+      }
+
+      if (dr.kind === 'potential') {
+        const tgt = dr.potentialTarget
+        const base = tgt === 'mezh' ? dr.startPotentialOffsetsMezh : dr.startPotentialOffsetsScheme
+        const setOffsets = tgt === 'mezh' ? setPotentialOffsetsMezh : setPotentialOffsetsScheme
+
+        setOffsets(() => {
+          const next = { ...base }
+          if (moveAll) {
+            for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
+          } else {
+            const id = dr.targetId
+            const cur = base[id] ?? { x: 0, y: 0 }
+            next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
+          }
+          return next
+        })
+        return
+      }
+
+      if (dr.kind === 'markerPin') {
+        setMarkerOffsets(() => {
+          const base = dr.startMarkerOffsets
+          const next = { ...base }
+          if (moveAll) {
+            for (const k of Object.keys(next)) next[k] = { x: base[k].x + dx, y: base[k].y + dy }
+          } else {
+            const id = dr.targetId
+            const cur = base[id] ?? { x: 0, y: 0 }
+            next[id] = { x: cur.x + dx, y: cur.y + dy }
+          }
+          return next
+        })
+        return
+      }
+
+      // markerCard
+      setMarkerCardOffsets(() => {
+        const base = dr.startMarkerCardOffsets
+        const next = { ...base }
+        if (moveAll) {
+          for (const k of Object.keys(next)) next[k] = { x: base[k].x + dx, y: base[k].y + dy }
+        } else {
+          const id = dr.targetId
+          const cur = base[id] ?? { x: 0, y: 0 }
+          next[id] = { x: cur.x + dx, y: cur.y + dy }
+        }
+        return next
+      })
+    },
+    [moveAll, setPotentialOffsetsMezh, setPotentialOffsetsScheme],
+  )
+
+  const endDrag = useCallback(() => {
+    if (dragRef.current) dragRef.current.dragging = false
+  }, [])
 
   // ---------------------------
-  // DEFAULT: 3 карточки
+  // INFO CARDS
   // ---------------------------
+
+  /**
+   * ✅ ВАЖНО:
+   * DefaultInfoCards (mode='none') — НЕ дублируем карточки из SchemeInfoCards.
+   * Здесь карточки про "паспорт участка" / "документы" / "что проверить".
+   */
   const DefaultInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
+
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-
-      <div className="relative mx-auto w-full max-w-7xl px-5 pb-8">
+      <div
+  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
+  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
+>
         <div className="pointer-events-auto -mt-12">
-          <div className={ROW_CLASS}>
-            <div className={CARD_MAIN}>
+          <div className={ROW_CLASS_DEFAULT}>
+            <MainInfoCard className={`sm:col-span-2 md:col-span-1 ${CARD_BASE}`} />
+
+            <div className={CARD_BASE}>
               <CardAccent />
-
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-xs text-white/60">Локация</div>
-                  <div className="mt-1 text-xl font-semibold tracking-tight text-white">Участок в природном окружении</div>
-                  <p className="mt-2 text-sm leading-relaxed text-white/70">
-                    Адрес: <span className="text-white/90">{LOCATION}</span>
-                  </p>
-                </div>
-
-                <div className="shrink-0 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/12">
-                  <div className="text-[11px] text-white/60">Слайд</div>
-                  <div className="text-sm font-semibold text-white/90">2 / 5</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">Паспорт участка</div>
+                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">
+                  база
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="mt-4 space-y-2">
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Режимы</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">схема / межевание</div>
+                  <div className="text-[11px] text-white/60">Категория / ВРИ</div>
+                  <div className="mt-1 text-sm font-semibold text-white/90">уточнить по ЕГРН / ПЗЗ</div>
                 </div>
+
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Потенциалы</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">включаются чекбоксом</div>
+                  <div className="text-[11px] text-white/60">Границы / площадь</div>
+                  <div className="mt-1 text-sm font-semibold text-white/90">сверить с КПТ/межеванием</div>
                 </div>
+
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Маркеры</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">на схеме/межевании</div>
+                  <div className="text-[11px] text-white/60">Ограничения</div>
+                  <div className="mt-1 text-sm font-semibold text-white/90">ЗОУИТ / водоохранные / сервитуты</div>
                 </div>
               </div>
 
-              <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-3">
-                <GlowButton onClick={deck.prev}>← Назад</GlowButton>
-                <button
-                  onClick={deck.next}
-                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/22 transition hover:bg-white/10"
-                >
-                  Далее →
-                </button>
-              </div>
+              {/* <div className="mt-auto pt-4 text-xs text-white/55">
+                * Цифры и статусы лучше “подтянуть” документами: ЕГРН, ПЗЗ, ГПЗУ, КПТ.
+              </div> */}
             </div>
 
-            <div className={CARD_SIDE}>
+            <div className={CARD_BASE}>
               <CardAccent />
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">Проверка перед решением</div>
+                <div className="rounded-full bg-lime-300/12 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
+                  чек-лист
+                </div>
+              </div>
 
+              <ul className="mt-4 space-y-2 text-sm text-white/75">
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-cyan-300/80" />
+                  ЕГРН: право, обременения, площадь, контур
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-lime-300/80" />
+                  ПЗЗ/ГПЗУ: что можно строить и в каких параметрах
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-violet-300/80" />
+                  Подъезд/дороги: статус, проезд, сезонность
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-rose-300/80" />
+                  Коммуникации: ТУ, точки подключения, мощности
+                </li>
+              </ul>
+
+              {/* <div className="mt-auto pt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+                <div className="text-[11px] text-white/60">Логика</div>
+                <div className="mt-1 text-sm font-semibold text-white/90">сначала документы → потом концепт → потом деньги</div>
+              </div> */}
+            </div>
+          </div>
+
+          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">3 карточки (общая информация) — без дублирования “схемы”.</div> */}
+        </div>
+      </div>
+    </div>
+  )
+
+  /**
+   * ✅ SchemeInfoCards — как сейчас (твоё текущее)
+   */
+  const SchemeInfoCards = (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
+      <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
+      <div
+  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
+  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
+>
+        <div className="pointer-events-auto -mt-12">
+          <div className={showPotential ? ROW_CLASS_SCHEME_POT : ROW_CLASS_DEFAULT}>
+            <MainInfoCard className={`sm:col-span-2 md:col-span-1 ${CARD_BASE}`} compact={showPotential} />
+
+            <div className={CARD_BASE}>
+              <CardAccent />
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Природные плюсы</div>
                 <div className="rounded-full bg-lime-300/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
@@ -679,19 +1505,20 @@ export default function SlideAerial() {
               </div>
             </div>
 
-            <div className={CARD_SIDE}>
+            <div className={CARD_BASE}>
               <CardAccent />
-
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Ценность и сценарии</div>
-                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">идея</div>
+                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">
+                  идея
+                </div>
               </div>
 
               <div className="mt-4 space-y-2">
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+                {/* <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-xs font-semibold text-white/90">Практика</div>
                   <div className="mt-1 text-xs text-white/65">коммуникации и логистику подтверждаем по ТУ/докам</div>
-                </div>
+                </div> */}
 
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-xs font-semibold text-white/90">Сценарии</div>
@@ -704,62 +1531,64 @@ export default function SlideAerial() {
                 </div>
               </div>
 
-              <div className="mt-auto pt-4 text-xs text-white/55">
+              {/* <div className="mt-auto pt-4 text-xs text-white/55">
                 * Точные расстояния/электро/дороги — фиксируй документально, чтобы не спорить цифрами.
-              </div>
+              </div> */}
             </div>
+
+            {showPotential && (
+              <PotentialInfoCard className={CARD_BASE} areas={POTENTIAL_AREAS as any} colors={potentialToneColors} />
+            )}
           </div>
 
-          <div className="mt-2 text-xs text-white/55 lg:text-right">3 карточки: первая шире, две — компактные.</div>
+          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">
+            {showPotential
+              ? '4 карточки: добавилась карточка «Потенциалы» (в цветах зон).'
+              : '3 карточки: режим «Общая схема».'}
+          </div> */}
         </div>
       </div>
     </div>
   )
 
-  // ---------------------------
-  // SCHEME: 3 карточки
-  // ---------------------------
-  const SchemeInfoCards = (
+  /**
+   * ✅ mode='none' + showPotential=true — отдельные “потенциальные” карточки,
+   * без карточек “Природные плюсы / Ценность и сценарии” из SchemeInfoCards.
+   */
+  const PotentialOnlyInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-
-      <div className="relative mx-auto w-full max-w-7xl px-5 pb-8">
+      <div
+  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
+  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
+>
         <div className="pointer-events-auto -mt-12">
-          <div className={ROW_CLASS}>
-            <div className={CARD_MAIN}>
-              <CardAccent />
-
-              <div className="flex items-start justify-between gap-4">
+          <div className={ROW_CLASS_DEFAULT}>
+            <div className={CARD_BASE}>
+              <ColorCardAccent colors={potentialToneColors} />
+              <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-xs text-white/60">Участок • общая схема</div>
-                  <div className="mt-1 text-xl font-semibold tracking-tight text-white">Схема участка и маркеры</div>
-                  <p className="mt-2 text-sm leading-relaxed text-white/70">
-                    Нажми на маркер — откроется карточка точки. Потенциалы можно включить чекбоксом.
+                  {/* <div className="text-xs text-white/60">Режим</div> */}
+                  <div className="mt-0 text-xl font-semibold tracking-tight text-white">Потенциальные територии </div>
+                  <p className="mt-4 text-sm leading-relaxed text-white/70">
+                    Адрес: <span className="text-white/90">{LOCATION}</span>
                   </p>
                 </div>
 
-                <div className="shrink-0 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/12">
+                <div className="shrink-0 rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-white/16">
                   <div className="text-[11px] text-white/60">Слайд</div>
                   <div className="text-sm font-semibold text-white/90">2 / 5</div>
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Площадь</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">≈ 28.5 га</div>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Статус</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">ИЖС / ЗНП</div>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Потенциалы</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">{showPotential ? 'включены' : 'выключены'}</div>
+              <div className="relative mt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+                <div className="text-[11px] text-white/60"></div>
+                <div className="mt-1 text-sm font-semibold text-white/90">
+                  Территории которые могут быть включены для обеспечения и расширения общей инфраструктуры
                 </div>
               </div>
 
-              <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-3">
+              {/* <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-3 relative">
                 <GlowButton onClick={deck.prev}>← Назад</GlowButton>
                 <button
                   onClick={deck.next}
@@ -767,200 +1596,100 @@ export default function SlideAerial() {
                 >
                   Далее →
                 </button>
-              </div>
+              </div> */}
             </div>
 
-            <div className={CARD_SIDE}>
-              <CardAccent />
+            <PotentialInfoCard className={CARD_BASE} areas={POTENTIAL_AREAS as any} colors={potentialToneColors} />
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">Плюсы и метрики</div>
-                <div className="rounded-full bg-lime-300/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
-                  выгода
+            {/* <div className={CARD_BASE}>
+              <ColorCardAccent colors={potentialToneColors} />
+              <div className="relative flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">Что делать с потенциалами</div>
+                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/16">
+                  гайд
                 </div>
               </div>
 
-              <ul className="mt-4 space-y-2 text-sm text-white/75">
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-lime-300/80" />
-                  Можно развивать по этапам — меньше риск
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-cyan-300/80" />
-                  Рост стоимости после улучшений/инфраструктуры
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-violet-300/80" />
-                  Вариативность использования: рекреация/сервис/стройка
-                </li>
-              </ul>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="relative mt-4 space-y-2">
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">До воды</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">0 м</div>
+                  <div className="text-xs font-semibold text-white/90">1) Смысл</div>
+                  <div className="mt-1 text-xs text-white/70">
+                    Потенциалы — это “варианты использования”. Не про границы, а про сценарии.
+                  </div>
                 </div>
+
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Подъезд</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">есть</div>
+                  <div className="text-xs font-semibold text-white/90">2) Проверка</div>
+                  <div className="mt-1 text-xs text-white/70">Каждый сценарий сверяем с ПЗЗ/ГПЗУ и ограничениями (ЗОУИТ).</div>
+                </div>
+
+                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+                  <div className="text-xs font-semibold text-white/90">3) Редактор</div>
+                  <div className="mt-1 text-xs text-white/70">
+                    Если нужно подвинуть зоны — открой “Редактор” → слой “Потенциалы”.
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className={CARD_SIDE}>
-              <CardAccent />
-
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white">Первые шаги</div>
-                  <div className="mt-1 text-xs text-white/60">быстро “упаковывают” проект</div>
-                </div>
-                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">план</div>
+              <div className="relative mt-auto pt-4 text-xs text-white/55">
+                * Чтобы увидеть маркеры инфраструктуры — включи “Общую схему”.
               </div>
-
-              <div className="mt-4 space-y-2">
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">1) Документы</div>
-                  <div className="mt-1 text-xs text-white/65">ограничения, сервитуты, ГПЗУ</div>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">2) Границы</div>
-                  <div className="mt-1 text-xs text-white/65">вынос точек, уточнение</div>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">3) Концепт</div>
-                  <div className="mt-1 text-xs text-white/65">2–3 сценария использования</div>
-                </div>
-              </div>
-            </div>
+            </div> */}
           </div>
 
-          <div className="mt-2 text-xs text-white/55 lg:text-right">ㅤ</div>
+          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">Потенциалы (без схемы): отдельный набор карточек, без дубля “Общей схемы”.</div> */}
         </div>
       </div>
     </div>
   )
 
-  // ---------------------------
-  // MEZH: 3 карточки
-  // ---------------------------
   const MezhInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-
-      <div className="relative mx-auto w-full max-w-7xl px-5 pb-8">
+     <div
+  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
+  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
+>
         <div className="pointer-events-auto -mt-12">
-          <div className={ROW_CLASS}>
-            <div className={CARD_MAIN}>
-              <CardAccent />
+          <div className={MEZH_ROW_CLASS}>
+            <MainInfoCard className={CARD_MAIN_MEZH} compact />
 
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-xs text-white/60">Карта • Участки</div>
-                  <div className="mt-1 text-xl font-semibold tracking-tight text-white">Карта участков</div>
-                  <p className="mt-2 text-sm leading-relaxed text-white/70">
-                    Нажимите на метки зон — откроются карточки для каждой территории.
-                  </p>
-                </div>
+            {OWNER_CARDS.map((c) => (
+  <OwnerCard
+    key={c.id}
+    className={CARD_SIDE_MEZH}
+    active={activeOwner === c.id}
+    title={c.title}
+    subtitle={c.subtitle}
+    areas={c.areas}
+    zones={OWNER_ZONE_MAP[c.id]}          // <-- подсветка берёт все зоны из areas
+    toneColors={ownerToneColors[c.id]}
+    zoneColorMap={mezhZoneColorMap}
+    onClick={() => {
+      setActiveOwner((prev) => (prev === c.id ? null : c.id))
+      setActiveZone(null)
+    }}
+  />
+))}
 
-                <div className="shrink-0 rounded-2xl bg-white/7 px-3 py-2 ring-1 ring-white/12">
-                  <div className="text-[11px] text-white/60">Слайд</div>
-                  <div className="text-sm font-semibold text-white/90">2 / 5</div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Зон</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">{MEZH_ZONES.length}</div>
-                </div>
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-[11px] text-white/60">Потенциалы</div>
-                  <div className="mt-1 text-sm font-semibold text-white/90">{showPotential ? 'включены' : 'выключены'}</div>
-                </div>
-              </div>
-
-              <div className="mt-auto pt-5 flex flex-wrap items-center justify-between gap-3">
-                <GlowButton onClick={deck.prev}>← Назад</GlowButton>
-                <button
-                  onClick={deck.next}
-                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/22 transition hover:bg-white/10"
-                >
-                  Далее →
-                </button>
-              </div>
-            </div>
-
-            <div className={CARD_SIDE}>
-              <CardAccent />
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">Юридика и ограничения</div>
-                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">проверка</div>
-              </div>
-
-              <ul className="mt-4 space-y-2 text-sm text-white/75">
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-cyan-300/80" />
-                  ЕГРН: права, площадь, категория, ВРИ
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-violet-300/80" />
-                  Обременения: сервитуты, охранные зоны
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-lime-300/80" />
-                  ГПЗУ/ПЗЗ: параметры и отступы
-                </li>
-              </ul>
-
-              <div className="mt-auto pt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                <div className="text-[11px] text-white/60">Результат</div>
-                <div className="mt-1 text-sm font-semibold text-white/90">Понимаем “что можно” без рисков</div>
-              </div>
-            </div>
-
-            <div className={CARD_SIDE}>
-              <CardAccent />
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">Геометрия и roadmap</div>
-                <div className="rounded-full bg-lime-300/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
-                  точность
-                </div>
-              </div>
-
-              <ul className="mt-4 space-y-2 text-sm text-white/75">
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-lime-300/80" />
-                  Контуры без разрывов и пересечений
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-cyan-300/80" />
-                  Сверка площадей и ключевых точек
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-violet-300/80" />
-                  Подготовка к концепту и этапности освоения
-                </li>
-              </ul>
-
-              <div className="mt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                <div className="text-xs font-semibold text-white/90">Дальше по шагам</div>
-                <div className="mt-1 text-xs text-white/65">верификация → концепт → упаковка (инфра + финмодель)</div>
-              </div>
-
-              <div className="mt-auto pt-4 text-xs text-white/55">* сюда можно подставить допуски/точность из геодезии</div>
-            </div>
           </div>
 
-          <div className="mt-2 text-xs text-white/55 lg:text-right">Межевание: кликай по меткам зон — открываются карточки.</div>
+          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">
+            В режиме межевания: выбери «Собственник» — подсветим его зоны, остальные приглушим. Маркеры на неактивных зонах скрываются.
+          </div> */}
         </div>
       </div>
     </div>
   )
 
-  const infoCards = mode === 'scheme' ? SchemeInfoCards : mode === 'mezh' ? MezhInfoCards : DefaultInfoCards
+  // ✅ выбор карточек:
+  // - mezh -> MezhInfoCards
+  // - scheme -> SchemeInfoCards (как сейчас)
+  // - none -> DefaultInfoCards или PotentialOnlyInfoCards (если чекбокс включён)
+  const infoCards = mode === 'mezh' ? MezhInfoCards : mode === 'scheme' ? SchemeInfoCards : showPotential ? PotentialOnlyInfoCards : DefaultInfoCards
+
+  // ✅ рисуем слои если выбран режим ИЛИ включены потенциалы
+  const hasAnyOverlay = mode !== 'none' || canShowPotentialNow
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-eco-gradient noise">
@@ -975,7 +1704,7 @@ export default function SlideAerial() {
         <div className="absolute inset-0 bg-volga-night/55" />
         <img ref={imgRef} src={mapImg} alt="" className="absolute opacity-0" aria-hidden="true" onLoad={recalc} />
 
-        {/* режимы + чекбокс */}
+        {/* режимы + чекбокс + кнопка редактора */}
         <div
           className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2"
           style={{ top: topControlsTop, transition: 'top 200ms ease' }}
@@ -987,8 +1716,11 @@ export default function SlideAerial() {
                 active={isScheme}
                 onClick={() => {
                   setMode((m) => (m === 'scheme' ? 'none' : 'scheme'))
+                  setActiveZone(null)
                   setEditMode(false)
-                  if (showPotential) setEditLayer('potential')
+                  setActiveOwner(null)
+                  setPotentialTarget('scheme')
+                  if (editorOpen) setEditLayer('markerPin')
                 }}
               >
                 Общая схема
@@ -998,8 +1730,11 @@ export default function SlideAerial() {
                 active={isMezh}
                 onClick={() => {
                   setMode((m) => (m === 'mezh' ? 'none' : 'mezh'))
-                  setEditLayer('mezh')
+                  setActiveZone(null)
                   setEditMode(false)
+                  setActiveOwner(null)
+                  setPotentialTarget('mezh')
+                  if (editorOpen) setEditLayer('mezh')
                 }}
               >
                 Карта межевания
@@ -1014,9 +1749,14 @@ export default function SlideAerial() {
                   onChange={(e) => {
                     const v = e.target.checked
                     setShowPotential(v)
-                    if (v && mode !== 'none') {
-                      setEditLayer('potential')
+
+                    if (v) {
                       setSelectedPotentialId(POTENTIAL_AREAS[0]?.id ?? 'P1')
+                      // ✅ target выбираем естественно по текущему режиму (none->scheme)
+                      setPotentialTarget(mode === 'mezh' ? 'mezh' : 'scheme')
+                      if (editorOpen) setEditLayer('potential')
+                    } else {
+                      if (activeMarker === POTENTIAL_MARKER_ID) setActiveMarker(null)
                     }
                   }}
                 />
@@ -1024,13 +1764,295 @@ export default function SlideAerial() {
                   Потенциальные территории
                 </label>
               </div>
+
+              <div className="ml-1">
+                {/* <SmallPillButton
+                  active={editorOpen}
+                  onClick={() => {
+                    setEditorOpen((v) => !v)
+                    if (editorOpen) setEditMode(false)
+                  }}
+                  title="Показать/скрыть редактор"
+                >
+                  {editorOpen ? 'Редактор: открыт' : 'Редактор'}
+                </SmallPillButton> */}
+              </div>
             </div>
           </div>
         </div>
 
+        {/* ✅ EDITOR PANEL */}
+        <AnimatePresence>
+          {editorOpen && (
+            <motion.div
+              className="pointer-events-auto absolute right-4 top-4 z-[80] w-[360px] overflow-hidden rounded-[22px] ring-1 ring-white/14"
+              initial={{ opacity: 0, y: -10, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(12,28,44,0.72), rgba(6,14,22,0.62))',
+                backdropFilter: 'blur(14px)',
+                boxShadow: '0 25px 90px rgba(0,0,0,0.55)',
+              }}
+            >
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[13px] font-extrabold text-white/90">Редактор</div>
+                    <div className="mt-1 text-[12px] text-white/55">drag мышью • стрелки • Shift = ×5</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditorOpen(false)
+                      setEditMode(false)
+                    }}
+                    className="rounded-2xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                  <div className="text-[12px] font-semibold text-white/80">Редактирование</div>
+                  <button
+                    onClick={() => setEditMode((v) => !v)}
+                    className={[
+                      'rounded-2xl px-3 py-2 text-[12px] font-extrabold ring-1 transition',
+                      editMode ? 'bg-lime-300/15 text-lime-200 ring-lime-200/25' : 'bg-white/6 text-white/80 ring-white/14',
+                    ].join(' ')}
+                  >
+                    {editMode ? 'ВКЛ' : 'ВЫКЛ'}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <SmallPillButton
+                    active={editLayer === 'mezh'}
+                    onClick={() => {
+                      setEditLayer('mezh')
+                      if (mode === 'none') setMode('mezh')
+                    }}
+                    title="Редактировать зоны межевания"
+                  >
+                    Межевание
+                  </SmallPillButton>
+
+                  <SmallPillButton
+                    active={editLayer === 'potential'}
+                    onClick={() => {
+                      if (!showPotential) setShowPotential(true)
+                      // target как есть, но если target=mezh — включаем mezh
+                      if (potentialTarget === 'mezh') setMode('mezh')
+                      // если сейчас mezh, а target=scheme — уйдём в scheme
+                      if (potentialTarget === 'scheme' && mode === 'mezh') setMode('scheme')
+                      setSelectedPotentialId(POTENTIAL_AREAS[0]?.id ?? 'P1')
+                      setEditLayer('potential')
+                    }}
+                    title="Редактировать потенциалы (раздельно для схемы/межевания)"
+                  >
+                    Потенциалы
+                  </SmallPillButton>
+
+                  <SmallPillButton
+                    active={editLayer === 'markerPin'}
+                    onClick={() => {
+                      setEditLayer('markerPin')
+                      if (mode === 'none') setMode('scheme')
+                    }}
+                    title="Редактировать маркеры (на общей схеме)"
+                  >
+                    Маркеры
+                  </SmallPillButton>
+
+                  <SmallPillButton
+                    active={editLayer === 'markerCard'}
+                    onClick={() => {
+                      setEditLayer('markerCard')
+                      if (mode === 'none') setMode('scheme')
+                    }}
+                    title="Редактировать карточки маркеров (на общей схеме)"
+                  >
+                    Карточки
+                  </SmallPillButton>
+                </div>
+
+                <div className="mt-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[12px] font-semibold text-white/80">Move all</div>
+                    <button
+                      onClick={() => setMoveAll((v) => !v)}
+                      className={[
+                        'rounded-2xl px-3 py-2 text-[12px] font-extrabold ring-1 transition',
+                        moveAll ? 'bg-white/15 text-white ring-white/25' : 'bg-white/6 text-white/80 ring-white/14',
+                      ].join(' ')}
+                    >
+                      {moveAll ? 'ДА' : 'НЕТ'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="text-[12px] font-semibold text-white/80">Step</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="rounded-xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
+                        onClick={() => setStep((v) => Math.max(1, v - 1))}
+                      >
+                        −
+                      </button>
+                      <div className="min-w-[44px] text-center text-[12px] font-extrabold text-white/90">{step}</div>
+                      <button
+                        className="rounded-xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
+                        onClick={() => setStep((v) => Math.min(50, v + 1))}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    {editLayer === 'mezh' && (
+                      <div className="flex items-center gap-2">
+                        <div className="text-[12px] text-white/60">Зона</div>
+                        <select
+                          value={selectedZoneId}
+                          onChange={(e) => setSelectedZoneId(e.target.value)}
+                          className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
+                        >
+                          {MEZH_ZONES.map((z) => (
+                            <option key={z.id} value={z.id}>
+                              {z.id} {z.label?.text ?? ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {editLayer === 'potential' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <SmallPillButton
+                            active={potentialTarget === 'scheme'}
+                            onClick={() => {
+                              setPotentialTarget('scheme')
+                              if (!showPotential) setShowPotential(true)
+                              if (mode === 'mezh') setMode('scheme')
+                            }}
+                            title="Редактировать потенциалы для общей схемы (и режима none)"
+                          >
+                            Схема
+                          </SmallPillButton>
+                          <SmallPillButton
+                            active={potentialTarget === 'mezh'}
+                            onClick={() => {
+                              setPotentialTarget('mezh')
+                              if (mode !== 'mezh') setMode('mezh')
+                              if (!showPotential) setShowPotential(true)
+                            }}
+                            title="Редактировать потенциалы для межевания"
+                          >
+                            Межевание
+                          </SmallPillButton>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="text-[12px] text-white/60">Potential</div>
+                          <select
+                            value={selectedPotentialId}
+                            onChange={(e) => setSelectedPotentialId(e.target.value)}
+                            className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
+                          >
+                            {POTENTIAL_AREAS.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {(editLayer === 'markerPin' || editLayer === 'markerCard') && (
+                      <div className="flex items-center gap-2">
+                        <div className="text-[12px] text-white/60">Marker</div>
+                        <select
+                          value={selectedMarkerId}
+                          onChange={(e) => setSelectedMarkerId(e.target.value)}
+                          className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
+                        >
+                          {MAP_MARKERS.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.id} — {m.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => applyDelta(0, -step)}
+                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
+                      disabled={!editMode || !canEditLayer}
+                      title="Вверх"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => applyDelta(-step, 0)}
+                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
+                      disabled={!editMode || !canEditLayer}
+                      title="Влево"
+                    >
+                      ←
+                    </button>
+                    <button
+                      onClick={() => applyDelta(step, 0)}
+                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
+                      disabled={!editMode || !canEditLayer}
+                      title="Вправо"
+                    >
+                      →
+                    </button>
+                    <button
+                      onClick={() => applyDelta(0, step)}
+                      className="col-span-3 rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
+                      disabled={!editMode || !canEditLayer}
+                      title="Вниз"
+                    >
+                      ↓
+                    </button>
+                  </div>
+
+                  <div className="mt-3 text-[12px] text-white/55">Доступность: {canEditLayer ? 'OK' : 'слой неактивен'}</div>
+                </div>
+
+                <div className="mt-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[12px] font-semibold text-white/80">Offsets JSON</div>
+                    <button
+                      onClick={copyDump}
+                      className="rounded-2xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
+                      title="Скопировать в буфер"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={offsetsDump}
+                    className="mt-2 h-[160px] w-full resize-none rounded-2xl bg-black/25 p-3 text-[11px] text-white/75 ring-1 ring-white/10 outline-none"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {fit && (
           <>
-            {/* БАЗОВЫЙ СЛОЙ (маска) — только карта + схемы/межевание/потенциалы */}
+            {/* БАЗОВЫЙ СЛОЙ — карта + схемы/межевание/потенциалы */}
             <div
               className="absolute z-10"
               style={{
@@ -1051,9 +2073,76 @@ export default function SlideAerial() {
                 </defs>
 
                 <AnimatePresence>
-                  {mode !== 'none' && (
+                  {hasAnyOverlay && (
                     <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                      {/* scheme */}
+                      {/* potential areas */}
+                      {canShowPotentialNow && (
+                        <g>
+                          {POTENTIAL_AREAS.map((p) => {
+                            const off = activePotentialOffsets[p.id] ?? { x: 0, y: 0 }
+                            const isSel = editLayer === 'potential' && selectedPotentialId === p.id
+                            const scale = off.scale ?? p.transform?.scale ?? 1
+                            const t = scale !== 1 ? `translate(${off.x} ${off.y}) scale(${scale})` : `translate(${off.x} ${off.y})`
+
+                            const allowDrag =
+                              editorOpen &&
+                              editMode &&
+                              editLayer === 'potential' &&
+                              canShowPotentialNow &&
+                              ((potentialTarget === 'scheme' && (mode === 'scheme' || mode === 'none')) ||
+                                (potentialTarget === 'mezh' && mode === 'mezh'))
+
+                            const onPointerDown = (e: React.PointerEvent) => {
+                              if (!allowDrag) return
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setSelectedPotentialId(p.id)
+                              const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
+                              if (!pt) return
+                              beginDrag('potential', p.id, pt)
+                              ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
+                            }
+
+                            const onPointerMove = (e: React.PointerEvent) => {
+                              if (!allowDrag) return
+                              const dr = dragRef.current
+                              if (!dr?.dragging || dr.kind !== 'potential') return
+                              const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
+                              if (!pt) return
+                              moveDrag(pt)
+                            }
+
+                            const onPointerUp = () => endDrag()
+
+                            return (
+                              <g key={p.id} transform={t} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+                                <path
+                                  d={p.d}
+                                  fill={p.fill}
+                                  stroke={isSel && allowDrag ? 'rgba(255,255,255,0.95)' : p.stroke}
+                                  strokeWidth={(p.strokeWidth ?? 5) + (isSel && allowDrag ? 1 : 0)}
+                                  vectorEffect="non-scaling-stroke"
+                                  filter="url(#glow)"
+                                  opacity={isSel && allowDrag ? 0.98 : 0.92}
+                                />
+                                {isSel && allowDrag && (
+                                  <path
+                                    d={p.d}
+                                    fill="none"
+                                    stroke="rgba(165,241,91,0.75)"
+                                    strokeWidth={6}
+                                    opacity={0.25}
+                                    vectorEffect="non-scaling-stroke"
+                                    filter="url(#glow)"
+                                  />
+                                )}
+                              </g>
+                            )
+                          })}
+                        </g>
+                      )}
+
+                      {/* parcel outline только в scheme */}
                       {mode === 'scheme' && (
                         <path
                           d={PARCEL_PATH_DETAIL}
@@ -1065,7 +2154,7 @@ export default function SlideAerial() {
                         />
                       )}
 
-                      {/* mezh */}
+                      {/* mezh только в mezh */}
                       {mode === 'mezh' && (
                         <g>
                           <g>
@@ -1090,63 +2179,62 @@ export default function SlideAerial() {
                               const scale = off.scale ?? z.transform?.scale ?? 1
                               const t = scale !== 1 ? `translate(${off.x} ${off.y}) scale(${scale})` : `translate(${off.x} ${off.y})`
 
+                              const allowDrag = editorOpen && editMode && editLayer === 'mezh' && mode === 'mezh'
+
+                              const hasOwnerFocus = !!activeOwnerSet
+                              const isOwnerZone = hasOwnerFocus ? activeOwnerSet!.has(z.id) : false
+                              const isDimmed = hasOwnerFocus && !isOwnerZone
+
+                              const fill = isDimmed ? 'rgba(210,210,210,0.28)' : z.fill
+                              const stroke = isDimmed ? 'rgba(255,255,255,0.18)' : z.stroke
+                              const baseOpacity = isDimmed ? 0.78 : 0.9
+
                               const onPointerDown = (e: React.PointerEvent) => {
-                                if (!editMode || editLayer !== 'mezh') return
+                                if (!allowDrag) return
                                 e.preventDefault()
                                 e.stopPropagation()
                                 setSelectedZoneId(z.id)
-                                const pt = clientToSvg(e.clientX, e.clientY)
+                                const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
                                 if (!pt) return
-                                dragRef.current = {
-                                  dragging: true,
-                                  kind: 'mezh',
-                                  startPt: pt,
-                                  startZoneOffsets: JSON.parse(JSON.stringify(zoneOffsets)),
-                                  startPotentialOffsets: JSON.parse(JSON.stringify(potentialOffsets)),
-                                  targetId: z.id,
-                                }
+                                beginDrag('mezh', z.id, pt)
                                 ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
                               }
 
                               const onPointerMove = (e: React.PointerEvent) => {
-                                if (!editMode) return
+                                if (!allowDrag) return
                                 const dr = dragRef.current
                                 if (!dr?.dragging || dr.kind !== 'mezh') return
-                                const pt = clientToSvg(e.clientX, e.clientY)
+                                const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
                                 if (!pt) return
-                                const dx = pt.x - dr.startPt.x
-                                const dy = pt.y - dr.startPt.y
-
-                                setZoneOffsets(() => {
-                                  const base = dr.startZoneOffsets
-                                  const next = { ...base }
-                                  if (moveAll) {
-                                    for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
-                                  } else {
-                                    const id = dr.targetId
-                                    const cur = base[id] ?? { x: 0, y: 0 }
-                                    next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
-                                  }
-                                  return next
-                                })
+                                moveDrag(pt)
                               }
 
-                              const onPointerUp = () => {
-                                if (dragRef.current) dragRef.current.dragging = false
-                              }
+                              const onPointerUp = () => endDrag()
 
                               return (
                                 <g key={z.id} transform={t} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
                                   <path
                                     d={z.d}
-                                    fill={z.fill}
-                                    stroke={isSel && editMode ? 'rgba(255,255,255,0.95)' : z.stroke}
-                                    strokeWidth={(z.strokeWidth ?? 3) + (isSel && editMode ? 1 : 0)}
+                                    fill={fill}
+                                    stroke={isSel && allowDrag ? 'rgba(255,255,255,0.95)' : stroke}
+                                    strokeWidth={(z.strokeWidth ?? 3) + (isSel && allowDrag ? 1 : 0)}
                                     vectorEffect="non-scaling-stroke"
-                                    opacity={isSel && editMode ? 0.95 : 0.9}
+                                    opacity={isSel && allowDrag ? 0.95 : baseOpacity}
                                   />
 
-                                  {isSel && editMode && (
+                                  {hasOwnerFocus && isOwnerZone && !allowDrag && (
+                                    <path
+                                      d={z.d}
+                                      fill="none"
+                                      stroke="rgba(255,255,255,0.90)"
+                                      strokeWidth={6}
+                                      opacity={0.42}
+                                      vectorEffect="non-scaling-stroke"
+                                      filter="url(#glow)"
+                                    />
+                                  )}
+
+                                  {isSel && allowDrag && (
                                     <path
                                       d={z.d}
                                       fill="none"
@@ -1161,10 +2249,11 @@ export default function SlideAerial() {
                                   <text
                                     x={z.label.x}
                                     y={z.label.y}
-                                    fill="rgba(255,255,255,0.86)"
+                                    fill={isDimmed ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.86)'}
                                     fontSize={22}
                                     fontFamily="ui-sans-serif"
                                     fontWeight={800}
+                                    opacity={isDimmed ? 0.7 : 1}
                                   >
                                     {z.label.text}
                                   </text>
@@ -1183,97 +2272,15 @@ export default function SlideAerial() {
                           </g>
                         </g>
                       )}
-
-                      {/* potential areas */}
-                      {canShowPotentialNow && (
-                        <g>
-                          {POTENTIAL_AREAS.map((p) => {
-                            const off = potentialOffsets[p.id] ?? { x: 0, y: 0 }
-                            const isSel = editLayer === 'potential' && selectedPotentialId === p.id
-                            const scale = off.scale ?? p.transform?.scale ?? 1
-                            const t = scale !== 1 ? `translate(${off.x} ${off.y}) scale(${scale})` : `translate(${off.x} ${off.y})`
-
-                            const onPointerDown = (e: React.PointerEvent) => {
-                              if (!editMode || editLayer !== 'potential') return
-                              e.preventDefault()
-                              e.stopPropagation()
-                              setSelectedPotentialId(p.id)
-                              const pt = clientToSvg(e.clientX, e.clientY)
-                              if (!pt) return
-                              dragRef.current = {
-                                dragging: true,
-                                kind: 'potential',
-                                startPt: pt,
-                                startZoneOffsets: JSON.parse(JSON.stringify(zoneOffsets)),
-                                startPotentialOffsets: JSON.parse(JSON.stringify(potentialOffsets)),
-                                targetId: p.id,
-                              }
-                              ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
-                            }
-
-                            const onPointerMove = (e: React.PointerEvent) => {
-                              if (!editMode) return
-                              const dr = dragRef.current
-                              if (!dr?.dragging || dr.kind !== 'potential') return
-                              const pt = clientToSvg(e.clientX, e.clientY)
-                              if (!pt) return
-                              const dx = pt.x - dr.startPt.x
-                              const dy = pt.y - dr.startPt.y
-
-                              setPotentialOffsets(() => {
-                                const base = dr.startPotentialOffsets
-                                const next = { ...base }
-                                if (moveAll) {
-                                  for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
-                                } else {
-                                  const id = dr.targetId
-                                  const cur = base[id] ?? { x: 0, y: 0 }
-                                  next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
-                                }
-                                return next
-                              })
-                            }
-
-                            const onPointerUp = () => {
-                              if (dragRef.current) dragRef.current.dragging = false
-                            }
-
-                            return (
-                              <g key={p.id} transform={t} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
-                                <path
-                                  d={p.d}
-                                  fill={p.fill}
-                                  stroke={isSel && editMode ? 'rgba(255,255,255,0.95)' : p.stroke}
-                                  strokeWidth={(p.strokeWidth ?? 5) + (isSel && editMode ? 1 : 0)}
-                                  vectorEffect="non-scaling-stroke"
-                                  filter="url(#glow)"
-                                  opacity={isSel && editMode ? 0.98 : 0.92}
-                                />
-                                {isSel && editMode && (
-                                  <path
-                                    d={p.d}
-                                    fill="none"
-                                    stroke="rgba(165,241,91,0.75)"
-                                    strokeWidth={6}
-                                    opacity={0.25}
-                                    vectorEffect="non-scaling-stroke"
-                                    filter="url(#glow)"
-                                  />
-                                )}
-                              </g>
-                            )
-                          })}
-                        </g>
-                      )}
                     </motion.g>
                   )}
                 </AnimatePresence>
               </svg>
             </div>
 
-            {/* СЛОЙ МАРКЕРОВ/КАРТОЧКИ (поверх всех фонов, без маски, не режется) */}
+            {/* СЛОЙ МАРКЕРОВ/КАРТОЧКИ */}
             <div
-              className="pointer-events-auto absolute z-40"
+              className={`${markersLayerPassThrough ? 'pointer-events-none' : 'pointer-events-auto'} absolute z-40`}
               style={{
                 left: fit.left,
                 top: fit.top,
@@ -1316,21 +2323,59 @@ export default function SlideAerial() {
                   </filter>
                 </defs>
 
-                {/* ✅ МАРКЕРЫ: ТОЛЬКО В SCHEME */}
-                {mode === 'scheme' && (
+                {/* ✅ МАРКЕРЫ (scheme + view) */}
+                {hasAnyOverlay && (
                   <g>
-                    {MAP_MARKERS.map((m) => {
+                    {visibleMarkers.map((m) => {
                       const mo = markerOffsets[m.id] ?? { x: 0, y: 0 }
                       const mx = m.x + mo.x
                       const my = m.y + mo.y
 
+                      const allowDrag = editorOpen && editMode && editLayer === 'markerPin' && mode === 'scheme'
+
+                      const onPointerDown = (e: React.PointerEvent<SVGGElement>) => {
+                        if (!allowDrag) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSelectedMarkerId(m.id)
+                        setActiveMarker(m.id)
+                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
+                        if (!pt) return
+                        beginDrag('markerPin', m.id, pt)
+                        ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
+                      }
+
+                      const onPointerMove = (e: React.PointerEvent<SVGGElement>) => {
+                        if (!allowDrag) return
+                        const dr = dragRef.current
+                        if (!dr?.dragging || dr.kind !== 'markerPin') return
+                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
+                        if (!pt) return
+                        moveDrag(pt)
+                      }
+
+                      const onPointerUp = () => endDrag()
+
                       const onMarkerClick = () => {
                         setActiveZone(null)
                         setSelectedMarkerId(m.id)
-                        setActiveMarker((prev) => (prev === m.id ? null : m.id))
+                        if (!allowDrag) setActiveMarker((prev) => (prev === m.id ? null : m.id))
+                        else setActiveMarker(m.id)
                       }
 
-                      return <PremiumMarker key={m.id} x={mx} y={my} active={activeMarker === m.id} editing={false} onClick={onMarkerClick} />
+                      return (
+                        <PremiumMarker
+                          key={m.id}
+                          x={mx}
+                          y={my}
+                          active={activeMarker === m.id || selectedMarkerId === m.id}
+                          editing={allowDrag}
+                          onClick={onMarkerClick}
+                          onPointerDown={allowDrag ? onPointerDown : undefined}
+                          onPointerMove={allowDrag ? onPointerMove : undefined}
+                          onPointerUp={allowDrag ? onPointerUp : undefined}
+                        />
+                      )
                     })}
                   </g>
                 )}
@@ -1338,9 +2383,8 @@ export default function SlideAerial() {
                 {/* ✅ МАРКЕРЫ ЗОН: ТОЛЬКО В MEZH */}
                 {mode === 'mezh' && !editMode && (
                   <g>
-                    {MEZH_ZONES.map((z) => {
+                    {(activeOwnerSet ? MEZH_ZONES.filter((z) => activeOwnerSet.has(z.id)) : MEZH_ZONES).map((z) => {
                       const c = getZoneCenter(z)
-
                       const onZoneClick = () => {
                         setActiveMarker(null)
                         setSelectedZoneId(z.id)
@@ -1348,23 +2392,16 @@ export default function SlideAerial() {
                       }
 
                       return (
-                        <PremiumMarker
-                          key={`zone-${z.id}`}
-                          x={c.x}
-                          y={c.y}
-                          active={activeZone === z.id}
-                          editing={false}
-                          onClick={onZoneClick}
-                        />
+                        <PremiumMarker key={`zone-${z.id}`} x={c.x} y={c.y} active={activeZone === z.id} editing={false} onClick={onZoneClick} />
                       )
                     })}
                   </g>
                 )}
 
+                {/* ✅ карточки маркеров и зон */}
                 <AnimatePresence>
-                  {/* ✅ КАРТОЧКА: ТОЛЬКО В SCHEME */}
-                  {mode === 'scheme' &&
-                    activeMarkerData &&
+                  {activeMarkerData &&
+                    isMarkerVisible(activeMarkerData.id) &&
                     (() => {
                       const mo = markerOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
                       const mx = activeMarkerData.x + mo.x
@@ -1393,6 +2430,30 @@ export default function SlideAerial() {
                       cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
                       cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
 
+                      const allowDragCard = editorOpen && editMode && editLayer === 'markerCard' && mode === 'scheme'
+
+                      const onCardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+                        if (!allowDragCard) return
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setSelectedMarkerId(activeMarkerData.id)
+                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
+                        if (!pt) return
+                        beginDrag('markerCard', activeMarkerData.id, pt)
+                        e.currentTarget.setPointerCapture(e.pointerId)
+                      }
+
+                      const onCardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+                        if (!allowDragCard) return
+                        const dr = dragRef.current
+                        if (!dr?.dragging || dr.kind !== 'markerCard') return
+                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
+                        if (!pt) return
+                        moveDrag(pt)
+                      }
+
+                      const onCardPointerUp = () => endDrag()
+
                       return (
                         <MarkerCard
                           key={activeMarkerData.id}
@@ -1403,13 +2464,15 @@ export default function SlideAerial() {
                           title={activeMarkerData.title}
                           lines={activeMarkerData.lines}
                           onClose={() => setActiveMarker(null)}
-                          editing={false}
+                          editing={allowDragCard}
                           pointerSide={side}
+                          onPointerDown={allowDragCard ? onCardPointerDown : undefined}
+                          onPointerMove={allowDragCard ? onCardPointerMove : undefined}
+                          onPointerUp={allowDragCard ? onCardPointerUp : undefined}
                         />
                       )
                     })()}
 
-                  {/* ✅ КАРТОЧКА: ТОЛЬКО В MEZH */}
                   {mode === 'mezh' &&
                     !editMode &&
                     activeZone &&
@@ -1463,9 +2526,10 @@ export default function SlideAerial() {
           </>
         )}
 
-        {/* ✅ NEW: Нижняя тонкая панель (не закрывает карту) */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-[80]">
-          <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
+        {/* ✅ Нижняя тонкая панель */}
+        <div className="pointer-events-none absolute inset-x-0  bottom-5 z-[80] ">
+
+          <div className="pointer-events-auto mx-auto flex w-fit items-center  gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
             <button
               onClick={deck.prev}
               className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
@@ -1491,7 +2555,6 @@ export default function SlideAerial() {
         </div>
       </div>
 
-      {/* ✅ NEW: Карточки рендерятся только когда их откроют */}
       {infoOpen ? infoCards : null}
     </div>
   )

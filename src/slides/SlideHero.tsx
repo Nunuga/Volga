@@ -27,7 +27,7 @@ export default function SlideHero() {
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-6xl">
               Земля на Волге
-              <span className="block text-white/75">виды, простор, приватность</span>
+              <span className="block text-white/75">Первая линия</span>
             </h1>
 
             {/* <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/70 sm:text-base">

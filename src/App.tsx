@@ -9,7 +9,7 @@ import SlideCTA from './slides/SlideCTA'
 export default function App() {
   return (
     <div className="h-screen w-screen bg-volga-night text-white">
-      <HorizontalDeck>
+      <HorizontalDeck hideDotsOn={[1]}>
         <SlideHero />
         <SlideAerial />
         <SlidePatchMap />
