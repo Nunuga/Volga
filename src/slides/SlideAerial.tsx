@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import mapImg from '../assets/map.png'
+import mapImg from '../assets/map.webp'
 import GlowButton from '../components/GlowButton'
 import { useDeck } from '../components/deckContext'
 import {
@@ -77,13 +77,24 @@ const dissolveMaskStyle: React.CSSProperties = {
   maskPosition: 'center',
 }
 
+// ✅ для SVG <foreignObject> иногда нужен XHTML namespace.
+// React/TS типы не знают про атрибут xmlns на div, поэтому пробрасываем его через any.
+const XHTML_NS = { xmlns: 'http://www.w3.org/1999/xhtml' }
+
+/** WebKit/Safari детект (чтобы уйти от foreignObject, который в Safari часто не масштабируется внутри SVG) */
+function isWebkitSafariLike() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  const isWebKit = /AppleWebKit/i.test(ua)
+  const isChromium = /Chrome|Chromium|Edg|OPR|YaBrowser/i.test(ua)
+  return isWebKit && !isChromium
+}
+
 /** Пытаемся привести rgb/rgba к нужной альфе (если не получается — возвращаем как есть) */
 function setRgbaAlpha(color: string, alpha: number) {
   const c = String(color || '').trim()
 
-  const m1 = c.match(
-    /rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+))?\s*\)/i,
-  )
+  const m1 = c.match(/rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+))?\s*\)/i)
   if (m1) {
     const r = Number(m1[1])
     const g = Number(m1[2])
@@ -123,10 +134,7 @@ function ColorCardAccent({ colors }: { colors: string[] }) {
       <div
         className="pointer-events-none absolute left-6 right-6 top-12 h-[2px] rounded-full opacity-80"
         style={{
-          background: `linear-gradient(to right, rgba(0,0,0,0), ${setRgbaAlpha(a, 0.8)}, ${setRgbaAlpha(
-            b,
-            0.75,
-          )}, rgba(0,0,0,0))`,
+          background: `linear-gradient(to right, rgba(0,0,0,0), ${setRgbaAlpha(a, 0.8)}, ${setRgbaAlpha(b, 0.75)}, rgba(0,0,0,0))`,
         }}
       />
 
@@ -356,14 +364,23 @@ function MarkerCard({
   return (
     <foreignObject x={x} y={y} width={width} height={height}>
       <motion.div
-        xmlns="http://www.w3.org/1999/xhtml"
+        {...(XHTML_NS as any)}
         initial={{ opacity: 0, y: 10, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         transition={{ duration: 0.2 }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          onPointerDown?.(e)
+        }}
+        onPointerMove={(e) => {
+          e.stopPropagation()
+          onPointerMove?.(e)
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation()
+          onPointerUp?.(e)
+        }}
         style={{
           position: 'relative',
           width: '100%',
@@ -374,6 +391,7 @@ function MarkerCard({
           background: 'linear-gradient(135deg, rgba(12,28,44,0.82), rgba(6,14,22,0.72))',
           border: '1px solid rgba(255,255,255,0.16)',
           backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           boxShadow: '0 28px 95px rgba(0,0,0,0.58), 0 0 0 1px rgba(165,241,91,0.10) inset',
           cursor: editing ? 'grab' : 'default',
           pointerEvents: 'auto',
@@ -454,18 +472,202 @@ function MarkerCard({
   )
 }
 
+/**
+ * ✅ HTML-оверлей карточки (для Safari/WebKit)
+ * width/height/x/y — в “SVG-юнитах”, а scale — коэффициент масштаба SVG.
+ */
+function MarkerCardHtml({
+  leftPx,
+  topPx,
+  scale,
+  width,
+  height,
+  title,
+  lines,
+  onClose,
+  editing,
+  pointerSide = 'left',
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+}: {
+  leftPx: number
+  topPx: number
+  scale: number
+  width: number
+  height: number
+  title: string
+  lines: string[]
+  onClose: () => void
+  editing: boolean
+  pointerSide?: 'left' | 'right'
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerMove?: (e: React.PointerEvent<HTMLDivElement>) => void
+  onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void
+}) {
+  const arrowStyle: React.CSSProperties =
+    pointerSide === 'right'
+      ? {
+          position: 'absolute',
+          right: -10,
+          top: 46,
+          width: 18,
+          height: 18,
+          transform: 'rotate(45deg)',
+          background: 'rgba(10,22,34,0.82)',
+          borderRight: '1px solid rgba(255,255,255,0.14)',
+          borderTop: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
+        }
+      : {
+          position: 'absolute',
+          left: -10,
+          top: 46,
+          width: 18,
+          height: 18,
+          transform: 'rotate(45deg)',
+          background: 'rgba(10,22,34,0.82)',
+          borderLeft: '1px solid rgba(255,255,255,0.14)',
+          borderBottom: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
+        }
+
+  // ✅ ВАЖНО:
+  // Масштаб карты (scale) — на внешней обёртке.
+  // Анимация (scale:0.98->1 и y) — на внутреннем motion.div.
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: leftPx,
+        top: topPx,
+        transform: `scale(${scale})`,
+        transformOrigin: 'top left',
+        pointerEvents: 'none', // клики пропускаем внутрь
+        overflow: 'visible',
+        willChange: 'transform',
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        transition={{ duration: 0.2 }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          onPointerDown?.(e)
+        }}
+        onPointerMove={(e) => {
+          e.stopPropagation()
+          onPointerMove?.(e)
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation()
+          onPointerUp?.(e)
+        }}
+        style={{
+          position: 'relative',
+          width, // это "в SVG-юнитах", но тут работает как базовый размер до scale()
+          height,
+          borderRadius: 22,
+          padding: 18,
+          color: 'white',
+          background: 'linear-gradient(135deg, rgba(12,28,44,0.82), rgba(6,14,22,0.72))',
+          border: '1px solid rgba(255,255,255,0.16)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          boxShadow: '0 28px 95px rgba(0,0,0,0.58), 0 0 0 1px rgba(165,241,91,0.10) inset',
+          cursor: editing ? 'grab' : 'default',
+          pointerEvents: 'auto', // ✅ кликабельно
+          overflow: 'hidden',
+          userSelect: editing ? 'none' : 'auto',
+          willChange: 'transform',
+        }}
+      >
+        <div style={arrowStyle} />
+
+        <div
+          style={{
+            position: 'absolute',
+            left: 14,
+            right: 14,
+            top: 12,
+            height: 3,
+            borderRadius: 999,
+            background:
+              'linear-gradient(90deg, rgba(165,241,91,0.0), rgba(165,241,91,0.75), rgba(91,232,241,0.65), rgba(165,241,91,0.0))',
+            filter: 'blur(0.2px)',
+            opacity: 0.9,
+          }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 10, letterSpacing: 0.2 }}>{title}</div>
+            <div style={{ maxHeight: height - 76, overflow: 'auto', paddingRight: 6 }}>
+              <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.92, fontSize: 18, lineHeight: 1.55 }}>
+                {lines.map((t) => (
+                  <li key={t} style={{ marginBottom: 4 }}>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            style={{
+              fontSize: 13,
+              padding: '8px 12px',
+              borderRadius: 14,
+              border: '1px solid rgba(255,255,255,0.18)',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.9)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {editing && (
+          <div
+            style={{
+              position: 'absolute',
+              right: 14,
+              bottom: 14,
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.65)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(0,0,0,0.20)',
+              padding: '6px 10px',
+              borderRadius: 999,
+            }}
+          >
+            drag: карточка
+          </div>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
 // ------------------------------
 // ✅ OWNERS (Карта межевания) — подсветка зон
 // ------------------------------
 type OwnerId = 'owner1' | 'owner2' | 'owner3' | 'owner4'
 
-
 // 1) Тип для строки в карточке (то самое “Общая территория / Участок 1 ...”)
 type OwnerArea = {
   label: string
-  zones: string[]           // ✅ только для подсветки на карте
-  value?: string            // ✅ сюда вручную вписываешь площадь/стоимость/любой текст
-  color?: string            // (опционально) цвет точки/чипа в карточке
+  zones: string[] // ✅ только для подсветки на карте
+  value?: string // ✅ сюда вручную вписываешь площадь/стоимость/любой текст
+  color?: string // (опционально) цвет точки/чипа в карточке
 }
 
 type OwnerCardConfig = {
@@ -482,7 +684,7 @@ export const OWNER_CARDS: OwnerCardConfig[] = [
     title: 'Собственник 1',
     subtitle: '',
     areas: [
-      { label: 'Общая', zones: ['A'], value: '130 100 кв.м.',  },
+      { label: 'Общая', zones: ['A'], value: '130 100 кв.м.' },
       { label: 'Участок 1', zones: ['A'], value: '27 600 кв.м.' },
       { label: 'Участок 2', zones: ['B'], value: '34 600 кв.м.' },
       { label: 'Участок 3', zones: ['D'], value: '32 500 кв.м.' },
@@ -534,14 +736,12 @@ export const OWNER_BY_ID: Record<OwnerId, OwnerCardConfig> = OWNER_CARDS.reduce(
   return acc
 }, {} as Record<OwnerId, OwnerCardConfig>)
 
-
-
 function OwnerCard({
   active,
   title,
   subtitle,
-  zones,          // <-- это уже OWNER_ZONE_MAP[ownerId]
-  areas,          // <-- новые “Общая территория / Участок 1 ...”
+  zones, // <-- это уже OWNER_ZONE_MAP[ownerId]
+  areas, // <-- новые “Общая территория / Участок 1 ...”
   onClick,
   className,
   toneColors,
@@ -579,8 +779,7 @@ function OwnerCard({
       ].join(' ')}
       style={{ pointerEvents: 'auto' }}
     >
-      
-<ColorCardAccent colors={colors} />
+      <ColorCardAccent colors={colors} />
       <div className="relative flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-white truncate">{title}</div>
@@ -594,57 +793,26 @@ function OwnerCard({
           ].join(' ')}
         >
           {active ? 'выбран' : 'выбрать'}
-          
         </div>
       </div>
 
       {/* список территорий “Общая территория / Участок 1 ...” */}
       <div className="relative mt-3 rounded-2xl bg-white/6 p-0  min-w-0">
-      
         <ul className="space-y-2 text-sm text-white/75">
-  {(areas?.length ? areas : [{ label: '—', zones: [], value: '' }]).map((a, idx) => (
-    <li key={idx} className="flex items-start gap-2">
-      <span
-        className="mt-[6px] h-2 w-2 shrink-0 rounded-full"
-        style={{
-          background:
-            a.color ||
-            (a.zones?.[0] && zoneColorMap?.[a.zones[0]]) ||
-            'rgba(255,255,255,0.55)',
-        }}
-      />
-      <div className="min-w-0">
-        <span className="text-white/85">{a.label}</span>
-        {a.value ? <span className="text-white/85">: {a.value}</span> : null}
+          {(areas?.length ? areas : [{ label: '—', zones: [], value: '' }]).map((a, idx) => (
+            <li key={idx} className="flex items-start gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full" style={{ background: getDotColor(a) }} />
+              <div className="min-w-0">
+                <span className="text-white/85">{a.label}</span>
+                {a.value ? <span className="text-white/85">: {a.value}</span> : null}
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
-    </li>
-  ))}
-</ul>
-
-        {/* если хочешь — можно оставить “чипсы” зон снизу */}
-        {/* <div className="mt-3 flex flex-wrap gap-1.5">
-          {(zones.length ? zones : ['—']).map((z) => {
-            const col = zoneColorMap?.[z] ?? 'rgba(255,255,255,0.55)'
-            return (
-              <span
-                key={z}
-                className="inline-flex items-center gap-2 rounded-full bg-black/20 px-2.5 py-1 text-[12px] font-semibold text-white/85 ring-1 ring-white/10"
-              >
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: col }} />
-                {z}
-              </span>
-            )
-          })}
-        </div> */}
-      </div>
-
-      {/* <div className="relative mt-auto pt-3 text-xs text-white/55">
-        Нажми ещё раз — сбросить подсветку.
-      </div> */}
     </button>
   )
 }
-
 
 function PotentialInfoCard({
   className,
@@ -669,46 +837,31 @@ function PotentialInfoCard({
         </div>
       </div>
 
-      {/* <div className="relative mt-3 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-        <div className="text-[11px] text-white/60">Что это</div>
-        <div className="mt-1 text-sm font-semibold text-white/90">
-          Зоны, которые можно рассмотреть как сценарии дополнения
-        </div>
-      </div> */}
-
       <div className="relative mt-3">
-        {/* <div className="text-[11px] text-white/60">Зоны на карте</div> */}
         <div className="mt-2 flex flex-wrap gap-1.5">
           <ul className="mt-4 space-y-2 text-sm text-white/75">
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-500/80" />
-                  Общая территория: 
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
-                  Участок 1: 
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
-                  Участок 2: 
-                </li>
-                 <li className="flex gap-2">
-                  <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
-                  Участок 3: 
-                </li>
-              </ul>
-          {/* {chips.map((p) => (
-            <span
-              key={p.id}
-              className="inline-flex items-center gap-2 rounded-full bg-black/20 px-2.5 py-1 text-[12px] font-semibold text-white/85 ring-1 ring-white/10"
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: p.fill ?? p.stroke ?? 'rgba(255,255,255,0.55)' }}
-              />
-              {p.id}
-            </span>
-          ))} */}
+            <li className="flex gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-500/80" />
+              Общая территория:
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+              Участок 1:
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+              Участок 2:
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+              Участок 3:
+            </li>
+            <li className="flex gap-2">
+              <span className="mt-[6px] h-2 w-2 shrink-0 rounded-full bg-orange-300/80" />
+              Участок 4: 38 770 кв.м.
+            </li>
+          </ul>
+
           {rest > 0 && (
             <span className="inline-flex items-center rounded-full bg-white/8 px-2.5 py-1 text-[12px] font-semibold text-white/70 ring-1 ring-white/10">
               +{rest}
@@ -716,10 +869,6 @@ function PotentialInfoCard({
           )}
         </div>
       </div>
-
-      {/* <div className="relative mt-auto pt-3 text-xs text-white/55">
-        * Включаются чекбоксом сверху. В редакторе: слой «Потенциалы».
-      </div> */}
     </div>
   )
 }
@@ -733,7 +882,6 @@ function MainInfoCard({ className, compact = false }: { className: string; compa
 
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          {/* <div className="text-xs text-white/60">Локация</div> */}
           <div className={['mt-1 font-semibold tracking-tight text-white', compact ? 'text-lg' : 'text-xl'].join(' ')}>
             Участок в природном окружении
           </div>
@@ -748,47 +896,20 @@ function MainInfoCard({ className, compact = false }: { className: string; compa
         </div>
       </div>
 
-      {!compact ? (
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Общая площадь</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">~ 30 ГА</div>
-          </div>
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Время от Москвы</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">1 час 20 минут</div>
-          </div>
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Время от центра Твери</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">20 минут</div>
-          </div>
+      <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+          <div className="text-[11px] text-white/60">Общая площадь</div>
+          <div className="mt-1 text-sm font-semibold text-white/90">~ 30 ГА</div>
         </div>
-      ) : (
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Общая площадь</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">~ 30 ГА</div>
-          </div>
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Время от Москвы</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">1 час 20 минут</div>
-          </div>
-          <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-            <div className="text-[11px] text-white/60">Время от центра Твери</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">20 минут</div>
-          </div>
+        <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+          <div className="text-[11px] text-white/60">Время от Москвы</div>
+          <div className="mt-1 text-sm font-semibold text-white/90">1 час 20 минут</div>
         </div>
-      )}
-
-      {/* <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-3">
-        <GlowButton onClick={deck.prev}>← Назад</GlowButton>
-        <button
-          onClick={deck.next}
-          className="rounded-2xl px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/22 transition hover:bg-white/10"
-        >
-          Далее →
-        </button>
-      </div> */}
+        <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
+          <div className="text-[11px] text-white/60">Время от центра Твери</div>
+          <div className="mt-1 text-sm font-semibold text-white/90">20 минут</div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -803,14 +924,13 @@ export default function SlideAerial() {
   const markersSvgRef = useRef<SVGSVGElement | null>(null)
 
   const [fit, setFit] = useState<FitBox | null>(null)
-  const [mode, setMode] = useState<OverlayMode>('none')
+  // ✅ по умолчанию показываем как в Chrome-скрине: «Карта межевания» + «Потенциальные территории» + карточки
+  const [mode, setMode] = useState<OverlayMode>('mezh')
 
   const [activeMarker, setActiveMarker] = useState<string | null>(null)
   const [activeZone, setActiveZone] = useState<string | null>(null)
 
-  const [showPotential, setShowPotential] = useState(false)
-
-  // ✅ ВАЖНО: потенциалы можно показывать даже когда mode === 'none'
+  const [showPotential, setShowPotential] = useState(true)
   const canShowPotentialNow = showPotential
 
   // ✅ редактор UI
@@ -820,7 +940,7 @@ export default function SlideAerial() {
   const [moveAll, setMoveAll] = useState(false)
   const [step, setStep] = useState(5)
 
-  // ✅ цель редактирования потенциалов (разные наборы координат)
+  // ✅ цель редактирования потенциалов
   const [potentialTarget, setPotentialTarget] = useState<PotentialTarget>('scheme')
 
   const [selectedZoneId, setSelectedZoneId] = useState<string>(MEZH_ZONES[0]?.id ?? 'A')
@@ -828,10 +948,13 @@ export default function SlideAerial() {
   const [selectedMarkerId, setSelectedMarkerId] = useState<string>(MAP_MARKERS[0]?.id ?? 'beach')
 
   // ✅ нижние карточки
-  const [infoOpen, setInfoOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(true)
 
   // ✅ выбранный собственник (для подсветки зон)
   const [activeOwner, setActiveOwner] = useState<OwnerId | null>(null)
+
+  // ✅ Safari/WebKit: используем HTML overlay вместо foreignObject
+  const useHtmlMarkerCards = useMemo(() => isWebkitSafariLike(), [])
 
   const vb = useMemo(() => {
     const parts = String(IMAGE_VIEWBOX).trim().split(/\s+/).map(Number)
@@ -841,6 +964,29 @@ export default function SlideAerial() {
     const h = Number.isFinite(parts[3]) ? parts[3] : 600
     return { minX, minY, w, h, maxX: minX + w, maxY: minY + h }
   }, [])
+
+  /** Геометрия "xMidYMid meet" для перевода SVG координат -> px внутри контейнера fit */
+  const svgGeom = useMemo(() => {
+    if (!fit) return null
+    const scale = Math.min(fit.width / vb.w, fit.height / vb.h)
+    const contentW = vb.w * scale
+    const contentH = vb.h * scale
+    const padX = (fit.width - contentW) / 2
+    const padY = (fit.height - contentH) / 2
+    return { scale, padX, padY }
+  }, [fit, vb.w, vb.h])
+
+  const svgToPx = useCallback(
+    (sx: number, sy: number) => {
+      if (!svgGeom) return { x: 0, y: 0, scale: 1 }
+      return {
+        x: svgGeom.padX + (sx - vb.minX) * svgGeom.scale,
+        y: svgGeom.padY + (sy - vb.minY) * svgGeom.scale,
+        scale: svgGeom.scale,
+      }
+    },
+    [svgGeom, vb.minX, vb.minY],
+  )
 
   const activeOwnerSet = useMemo(() => {
     if (!activeOwner) return null
@@ -924,15 +1070,14 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [potentialOffsetsScheme, setPotentialOffsetsScheme] = useState<
-    Record<string, { x: number; y: number; scale?: number }>
-  >(() => buildPotentialOffsetsFromFile('scheme'))
+  const [potentialOffsetsScheme, setPotentialOffsetsScheme] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
+    buildPotentialOffsetsFromFile('scheme'),
+  )
 
-  const [potentialOffsetsMezh, setPotentialOffsetsMezh] = useState<
-    Record<string, { x: number; y: number; scale?: number }>
-  >(() => buildPotentialOffsetsFromFile('mezh'))
+  const [potentialOffsetsMezh, setPotentialOffsetsMezh] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
+    buildPotentialOffsetsFromFile('mezh'),
+  )
 
-  // ✅ mode==='none' трактуем как scheme для потенциалов (визуально)
   const activePotentialOffsets = useMemo(() => {
     return mode === 'mezh' ? potentialOffsetsMezh : potentialOffsetsScheme
   }, [mode, potentialOffsetsMezh, potentialOffsetsScheme])
@@ -948,9 +1093,7 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { x: number; y: number }>>(() =>
-    buildMarkerOffsetsFromFile(),
-  )
+  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { x: number; y: number }>>(() => buildMarkerOffsetsFromFile())
 
   const buildMarkerCardOffsetsFromFile = useCallback(() => {
     const obj: Record<string, { x: number; y: number }> = {}
@@ -962,9 +1105,7 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [markerCardOffsets, setMarkerCardOffsets] = useState<Record<string, { x: number; y: number }>>(() =>
-    buildMarkerCardOffsetsFromFile(),
-  )
+  const [markerCardOffsets, setMarkerCardOffsets] = useState<Record<string, { x: number; y: number }>>(() => buildMarkerCardOffsetsFromFile())
 
   // ---- recalc fit ----
   const recalc = useCallback(() => {
@@ -1033,9 +1174,7 @@ export default function SlideAerial() {
 
   const visibleMarkers = useMemo(() => {
     return MAP_MARKERS.filter((m) => {
-      // ✅ view-маркер (потенциалы) виден даже при mode='none'
       if (m.id === POTENTIAL_MARKER_ID) return canShowPotentialNow
-      // остальные маркеры — только на "scheme"
       return mode === 'scheme'
     })
   }, [mode, canShowPotentialNow])
@@ -1063,7 +1202,6 @@ export default function SlideAerial() {
       }
 
       if (editLayer === 'potential') {
-        // mode='none' -> редактируем scheme offsets
         const setOffsets = mode === 'mezh' ? setPotentialOffsetsMezh : setPotentialOffsetsScheme
         setOffsets((prev) => {
           const next = { ...prev }
@@ -1096,7 +1234,6 @@ export default function SlideAerial() {
         return
       }
 
-      // markerCard
       setMarkerCardOffsets((prev) => {
         const next = { ...prev }
         if (moveAll) {
@@ -1120,7 +1257,6 @@ export default function SlideAerial() {
 
     if (editLayer === 'potential') {
       if (!canShowPotentialNow) return
-      // ✅ scheme-потенциалы можно двигать и в mode='none'
       if (potentialTarget === 'scheme' && !(mode === 'scheme' || mode === 'none')) return
       if (potentialTarget === 'mezh' && mode !== 'mezh') return
     }
@@ -1166,7 +1302,6 @@ export default function SlideAerial() {
     potentialTarget: PotentialTarget
   } | null>(null)
 
-  // auto-fix layer when open editor
   useEffect(() => {
     if (!editorOpen) {
       setEditMode(false)
@@ -1190,7 +1325,6 @@ export default function SlideAerial() {
     }
   }, [canShowPotentialNow, activeMarker])
 
-  // ✅ правила активности при смене режимов
   useEffect(() => {
     if (mode === 'none') {
       setActiveZone(null)
@@ -1220,16 +1354,13 @@ export default function SlideAerial() {
     if (!infoOpen) setActiveOwner(null)
   }, [infoOpen])
 
-  // ✅ синхронизируем target потенциалов с режимом (mode='none' -> scheme)
   useEffect(() => {
     if (mode === 'mezh') setPotentialTarget('mezh')
     else setPotentialTarget('scheme')
   }, [mode])
 
-  const modeLabel =
-    mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : showPotential ? 'Потенциалы' : 'Общая информация'
+  const modeLabel = mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : showPotential ? 'Потенциалы' : 'Общая информация'
 
-  // ---- editor availability ----
   const canEditLayer = useMemo(() => {
     if (!editorOpen) return false
     if (editLayer === 'mezh') return mode === 'mezh'
@@ -1347,7 +1478,6 @@ export default function SlideAerial() {
         return
       }
 
-      // markerCard
       setMarkerCardOffsets(() => {
         const base = dr.startMarkerCardOffsets
         const next = { ...base }
@@ -1371,53 +1501,33 @@ export default function SlideAerial() {
   // ---------------------------
   // INFO CARDS
   // ---------------------------
-
-  /**
-   * ✅ ВАЖНО:
-   * DefaultInfoCards (mode='none') — НЕ дублируем карточки из SchemeInfoCards.
-   * Здесь карточки про "паспорт участка" / "документы" / "что проверить".
-   */
   const DefaultInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
-
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-      <div
-  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
-  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
->
+      <div className="relative mx-auto w-full max-w-[1600px] px-5 pb-8" style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }}>
         <div className="pointer-events-auto -mt-12">
           <div className={ROW_CLASS_DEFAULT}>
             <MainInfoCard className={`sm:col-span-2 md:col-span-1 ${CARD_BASE}`} />
-
             <div className={CARD_BASE}>
               <CardAccent />
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Паспорт участка</div>
-                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">
-                  база
-                </div>
+                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">база</div>
               </div>
-
               <div className="mt-4 space-y-2">
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-[11px] text-white/60">Категория / ВРИ</div>
                   <div className="mt-1 text-sm font-semibold text-white/90">уточнить по ЕГРН / ПЗЗ</div>
                 </div>
-
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-[11px] text-white/60">Границы / площадь</div>
                   <div className="mt-1 text-sm font-semibold text-white/90">сверить с КПТ/межеванием</div>
                 </div>
-
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-[11px] text-white/60">Ограничения</div>
                   <div className="mt-1 text-sm font-semibold text-white/90">ЗОУИТ / водоохранные / сервитуты</div>
                 </div>
               </div>
-
-              {/* <div className="mt-auto pt-4 text-xs text-white/55">
-                * Цифры и статусы лучше “подтянуть” документами: ЕГРН, ПЗЗ, ГПЗУ, КПТ.
-              </div> */}
             </div>
 
             <div className={CARD_BASE}>
@@ -1447,30 +1557,17 @@ export default function SlideAerial() {
                   Коммуникации: ТУ, точки подключения, мощности
                 </li>
               </ul>
-
-              {/* <div className="mt-auto pt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                <div className="text-[11px] text-white/60">Логика</div>
-                <div className="mt-1 text-sm font-semibold text-white/90">сначала документы → потом концепт → потом деньги</div>
-              </div> */}
             </div>
           </div>
-
-          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">3 карточки (общая информация) — без дублирования “схемы”.</div> */}
         </div>
       </div>
     </div>
   )
 
-  /**
-   * ✅ SchemeInfoCards — как сейчас (твоё текущее)
-   */
   const SchemeInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-      <div
-  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
-  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
->
+      <div className="relative mx-auto w-full max-w-[1600px] px-5 pb-8" style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }}>
         <div className="pointer-events-auto -mt-12">
           <div className={showPotential ? ROW_CLASS_SCHEME_POT : ROW_CLASS_DEFAULT}>
             <MainInfoCard className={`sm:col-span-2 md:col-span-1 ${CARD_BASE}`} compact={showPotential} />
@@ -1515,11 +1612,6 @@ export default function SlideAerial() {
               </div>
 
               <div className="mt-4 space-y-2">
-                {/* <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">Практика</div>
-                  <div className="mt-1 text-xs text-white/65">коммуникации и логистику подтверждаем по ТУ/докам</div>
-                </div> */}
-
                 <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
                   <div className="text-xs font-semibold text-white/90">Сценарии</div>
                   <div className="mt-1 text-xs text-white/65">дом, рекреация, инвестиционный формат “поэтапно”</div>
@@ -1530,45 +1622,25 @@ export default function SlideAerial() {
                   <div className="mt-1 text-xs text-white/65">ЕГРН + ГПЗУ/ПЗЗ → ограничения → концепт</div>
                 </div>
               </div>
-
-              {/* <div className="mt-auto pt-4 text-xs text-white/55">
-                * Точные расстояния/электро/дороги — фиксируй документально, чтобы не спорить цифрами.
-              </div> */}
             </div>
 
-            {showPotential && (
-              <PotentialInfoCard className={CARD_BASE} areas={POTENTIAL_AREAS as any} colors={potentialToneColors} />
-            )}
+            {showPotential && <PotentialInfoCard className={CARD_BASE} areas={POTENTIAL_AREAS as any} colors={potentialToneColors} />}
           </div>
-
-          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">
-            {showPotential
-              ? '4 карточки: добавилась карточка «Потенциалы» (в цветах зон).'
-              : '3 карточки: режим «Общая схема».'}
-          </div> */}
         </div>
       </div>
     </div>
   )
 
-  /**
-   * ✅ mode='none' + showPotential=true — отдельные “потенциальные” карточки,
-   * без карточек “Природные плюсы / Ценность и сценарии” из SchemeInfoCards.
-   */
   const PotentialOnlyInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-      <div
-  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
-  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
->
+      <div className="relative mx-auto w-full max-w-[1600px] px-5 pb-8" style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }}>
         <div className="pointer-events-auto -mt-12">
           <div className={ROW_CLASS_DEFAULT}>
             <div className={CARD_BASE}>
               <ColorCardAccent colors={potentialToneColors} />
               <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  {/* <div className="text-xs text-white/60">Режим</div> */}
                   <div className="mt-0 text-xl font-semibold tracking-tight text-white">Потенциальные територии </div>
                   <p className="mt-4 text-sm leading-relaxed text-white/70">
                     Адрес: <span className="text-white/90">{LOCATION}</span>
@@ -1582,62 +1654,14 @@ export default function SlideAerial() {
               </div>
 
               <div className="relative mt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                <div className="text-[11px] text-white/60"></div>
                 <div className="mt-1 text-sm font-semibold text-white/90">
                   Территории которые могут быть включены для обеспечения и расширения общей инфраструктуры
                 </div>
               </div>
-
-              {/* <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-3 relative">
-                <GlowButton onClick={deck.prev}>← Назад</GlowButton>
-                <button
-                  onClick={deck.next}
-                  className="rounded-2xl px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/22 transition hover:bg-white/10"
-                >
-                  Далее →
-                </button>
-              </div> */}
             </div>
 
             <PotentialInfoCard className={CARD_BASE} areas={POTENTIAL_AREAS as any} colors={potentialToneColors} />
-
-            {/* <div className={CARD_BASE}>
-              <ColorCardAccent colors={potentialToneColors} />
-              <div className="relative flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">Что делать с потенциалами</div>
-                <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/16">
-                  гайд
-                </div>
-              </div>
-
-              <div className="relative mt-4 space-y-2">
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">1) Смысл</div>
-                  <div className="mt-1 text-xs text-white/70">
-                    Потенциалы — это “варианты использования”. Не про границы, а про сценарии.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">2) Проверка</div>
-                  <div className="mt-1 text-xs text-white/70">Каждый сценарий сверяем с ПЗЗ/ГПЗУ и ограничениями (ЗОУИТ).</div>
-                </div>
-
-                <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                  <div className="text-xs font-semibold text-white/90">3) Редактор</div>
-                  <div className="mt-1 text-xs text-white/70">
-                    Если нужно подвинуть зоны — открой “Редактор” → слой “Потенциалы”.
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative mt-auto pt-4 text-xs text-white/55">
-                * Чтобы увидеть маркеры инфраструктуры — включи “Общую схему”.
-              </div>
-            </div> */}
           </div>
-
-          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">Потенциалы (без схемы): отдельный набор карточек, без дубля “Общей схемы”.</div> */}
         </div>
       </div>
     </div>
@@ -1646,49 +1670,36 @@ export default function SlideAerial() {
   const MezhInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
       <div className={`absolute inset-x-0 bottom-0 ${OVERLAY_GRADIENT_H} bg-gradient-to-t from-black/75 via-black/28 to-transparent`} />
-     <div
-  className="relative mx-auto w-full max-w-[1600px] px-5 pb-8"
-  style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }} // ⬅️ поднимаем карточки, фон/градиент не двигаем
->
+      <div className="relative mx-auto w-full max-w-[1600px] px-5 pb-8" style={{ paddingBottom: `calc(2rem + ${BOTTOM_BAR_SAFE})` }}>
         <div className="pointer-events-auto -mt-12">
           <div className={MEZH_ROW_CLASS}>
             <MainInfoCard className={CARD_MAIN_MEZH} compact />
 
             {OWNER_CARDS.map((c) => (
-  <OwnerCard
-    key={c.id}
-    className={CARD_SIDE_MEZH}
-    active={activeOwner === c.id}
-    title={c.title}
-    subtitle={c.subtitle}
-    areas={c.areas}
-    zones={OWNER_ZONE_MAP[c.id]}          // <-- подсветка берёт все зоны из areas
-    toneColors={ownerToneColors[c.id]}
-    zoneColorMap={mezhZoneColorMap}
-    onClick={() => {
-      setActiveOwner((prev) => (prev === c.id ? null : c.id))
-      setActiveZone(null)
-    }}
-  />
-))}
-
+              <OwnerCard
+                key={c.id}
+                className={CARD_SIDE_MEZH}
+                active={activeOwner === c.id}
+                title={c.title}
+                subtitle={c.subtitle}
+                areas={c.areas}
+                zones={OWNER_ZONE_MAP[c.id]}
+                toneColors={ownerToneColors[c.id]}
+                zoneColorMap={mezhZoneColorMap}
+                onClick={() => {
+                  setActiveOwner((prev) => (prev === c.id ? null : c.id))
+                  setActiveZone(null)
+                }}
+              />
+            ))}
           </div>
-
-          {/* <div className="mt-2 text-xs text-white/55 lg:text-right">
-            В режиме межевания: выбери «Собственник» — подсветим его зоны, остальные приглушим. Маркеры на неактивных зонах скрываются.
-          </div> */}
         </div>
       </div>
     </div>
   )
 
-  // ✅ выбор карточек:
-  // - mezh -> MezhInfoCards
-  // - scheme -> SchemeInfoCards (как сейчас)
-  // - none -> DefaultInfoCards или PotentialOnlyInfoCards (если чекбокс включён)
   const infoCards = mode === 'mezh' ? MezhInfoCards : mode === 'scheme' ? SchemeInfoCards : showPotential ? PotentialOnlyInfoCards : DefaultInfoCards
 
-  // ✅ рисуем слои если выбран режим ИЛИ включены потенциалы
   const hasAnyOverlay = mode !== 'none' || canShowPotentialNow
 
   return (
@@ -1697,18 +1708,16 @@ export default function SlideAerial() {
         <img
           src={mapImg}
           alt=""
+          decoding="async"
           className="absolute inset-0 h-full w-full scale-110 object-cover blur-2xl opacity-35"
           aria-hidden="true"
           draggable={false}
         />
         <div className="absolute inset-0 bg-volga-night/55" />
-        <img ref={imgRef} src={mapImg} alt="" className="absolute opacity-0" aria-hidden="true" onLoad={recalc} />
+        <img ref={imgRef} src={mapImg} alt="" decoding="async" className="absolute opacity-0" aria-hidden="true" onLoad={recalc} />
 
-        {/* режимы + чекбокс + кнопка редактора */}
-        <div
-          className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2"
-          style={{ top: topControlsTop, transition: 'top 200ms ease' }}
-        >
+        {/* режимы + чекбокс */}
+        <div className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2" style={{ top: topControlsTop, transition: 'top 200ms ease' }}>
           <div className="rounded-[0px] px-3 py-2 shadow-soft ">
             <div className="pointer-events-none absolute inset-x-6 top-0 h-[2px] rounded-full bg-gradient-to-r from-lime-200/0 via-lime-200/55 to-cyan-200/0 opacity-70" />
             <div className="flex flex-wrap items-center gap-2">
@@ -1752,7 +1761,6 @@ export default function SlideAerial() {
 
                     if (v) {
                       setSelectedPotentialId(POTENTIAL_AREAS[0]?.id ?? 'P1')
-                      // ✅ target выбираем естественно по текущему режиму (none->scheme)
                       setPotentialTarget(mode === 'mezh' ? 'mezh' : 'scheme')
                       if (editorOpen) setEditLayer('potential')
                     } else {
@@ -1764,291 +1772,9 @@ export default function SlideAerial() {
                   Потенциальные территории
                 </label>
               </div>
-
-              <div className="ml-1">
-                {/* <SmallPillButton
-                  active={editorOpen}
-                  onClick={() => {
-                    setEditorOpen((v) => !v)
-                    if (editorOpen) setEditMode(false)
-                  }}
-                  title="Показать/скрыть редактор"
-                >
-                  {editorOpen ? 'Редактор: открыт' : 'Редактор'}
-                </SmallPillButton> */}
-              </div>
             </div>
           </div>
         </div>
-
-        {/* ✅ EDITOR PANEL */}
-        <AnimatePresence>
-          {editorOpen && (
-            <motion.div
-              className="pointer-events-auto absolute right-4 top-4 z-[80] w-[360px] overflow-hidden rounded-[22px] ring-1 ring-white/14"
-              initial={{ opacity: 0, y: -10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.18 }}
-              style={{
-                background: 'linear-gradient(135deg, rgba(12,28,44,0.72), rgba(6,14,22,0.62))',
-                backdropFilter: 'blur(14px)',
-                boxShadow: '0 25px 90px rgba(0,0,0,0.55)',
-              }}
-            >
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[13px] font-extrabold text-white/90">Редактор</div>
-                    <div className="mt-1 text-[12px] text-white/55">drag мышью • стрелки • Shift = ×5</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setEditorOpen(false)
-                      setEditMode(false)
-                    }}
-                    className="rounded-2xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
-                  <div className="text-[12px] font-semibold text-white/80">Редактирование</div>
-                  <button
-                    onClick={() => setEditMode((v) => !v)}
-                    className={[
-                      'rounded-2xl px-3 py-2 text-[12px] font-extrabold ring-1 transition',
-                      editMode ? 'bg-lime-300/15 text-lime-200 ring-lime-200/25' : 'bg-white/6 text-white/80 ring-white/14',
-                    ].join(' ')}
-                  >
-                    {editMode ? 'ВКЛ' : 'ВЫКЛ'}
-                  </button>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <SmallPillButton
-                    active={editLayer === 'mezh'}
-                    onClick={() => {
-                      setEditLayer('mezh')
-                      if (mode === 'none') setMode('mezh')
-                    }}
-                    title="Редактировать зоны межевания"
-                  >
-                    Межевание
-                  </SmallPillButton>
-
-                  <SmallPillButton
-                    active={editLayer === 'potential'}
-                    onClick={() => {
-                      if (!showPotential) setShowPotential(true)
-                      // target как есть, но если target=mezh — включаем mezh
-                      if (potentialTarget === 'mezh') setMode('mezh')
-                      // если сейчас mezh, а target=scheme — уйдём в scheme
-                      if (potentialTarget === 'scheme' && mode === 'mezh') setMode('scheme')
-                      setSelectedPotentialId(POTENTIAL_AREAS[0]?.id ?? 'P1')
-                      setEditLayer('potential')
-                    }}
-                    title="Редактировать потенциалы (раздельно для схемы/межевания)"
-                  >
-                    Потенциалы
-                  </SmallPillButton>
-
-                  <SmallPillButton
-                    active={editLayer === 'markerPin'}
-                    onClick={() => {
-                      setEditLayer('markerPin')
-                      if (mode === 'none') setMode('scheme')
-                    }}
-                    title="Редактировать маркеры (на общей схеме)"
-                  >
-                    Маркеры
-                  </SmallPillButton>
-
-                  <SmallPillButton
-                    active={editLayer === 'markerCard'}
-                    onClick={() => {
-                      setEditLayer('markerCard')
-                      if (mode === 'none') setMode('scheme')
-                    }}
-                    title="Редактировать карточки маркеров (на общей схеме)"
-                  >
-                    Карточки
-                  </SmallPillButton>
-                </div>
-
-                <div className="mt-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[12px] font-semibold text-white/80">Move all</div>
-                    <button
-                      onClick={() => setMoveAll((v) => !v)}
-                      className={[
-                        'rounded-2xl px-3 py-2 text-[12px] font-extrabold ring-1 transition',
-                        moveAll ? 'bg-white/15 text-white ring-white/25' : 'bg-white/6 text-white/80 ring-white/14',
-                      ].join(' ')}
-                    >
-                      {moveAll ? 'ДА' : 'НЕТ'}
-                    </button>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="text-[12px] font-semibold text-white/80">Step</div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="rounded-xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
-                        onClick={() => setStep((v) => Math.max(1, v - 1))}
-                      >
-                        −
-                      </button>
-                      <div className="min-w-[44px] text-center text-[12px] font-extrabold text-white/90">{step}</div>
-                      <button
-                        className="rounded-xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
-                        onClick={() => setStep((v) => Math.min(50, v + 1))}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    {editLayer === 'mezh' && (
-                      <div className="flex items-center gap-2">
-                        <div className="text-[12px] text-white/60">Зона</div>
-                        <select
-                          value={selectedZoneId}
-                          onChange={(e) => setSelectedZoneId(e.target.value)}
-                          className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
-                        >
-                          {MEZH_ZONES.map((z) => (
-                            <option key={z.id} value={z.id}>
-                              {z.id} {z.label?.text ?? ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {editLayer === 'potential' && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <SmallPillButton
-                            active={potentialTarget === 'scheme'}
-                            onClick={() => {
-                              setPotentialTarget('scheme')
-                              if (!showPotential) setShowPotential(true)
-                              if (mode === 'mezh') setMode('scheme')
-                            }}
-                            title="Редактировать потенциалы для общей схемы (и режима none)"
-                          >
-                            Схема
-                          </SmallPillButton>
-                          <SmallPillButton
-                            active={potentialTarget === 'mezh'}
-                            onClick={() => {
-                              setPotentialTarget('mezh')
-                              if (mode !== 'mezh') setMode('mezh')
-                              if (!showPotential) setShowPotential(true)
-                            }}
-                            title="Редактировать потенциалы для межевания"
-                          >
-                            Межевание
-                          </SmallPillButton>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className="text-[12px] text-white/60">Potential</div>
-                          <select
-                            value={selectedPotentialId}
-                            onChange={(e) => setSelectedPotentialId(e.target.value)}
-                            className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
-                          >
-                            {POTENTIAL_AREAS.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.id}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    {(editLayer === 'markerPin' || editLayer === 'markerCard') && (
-                      <div className="flex items-center gap-2">
-                        <div className="text-[12px] text-white/60">Marker</div>
-                        <select
-                          value={selectedMarkerId}
-                          onChange={(e) => setSelectedMarkerId(e.target.value)}
-                          className="flex-1 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/85 ring-1 ring-white/14 outline-none"
-                        >
-                          {MAP_MARKERS.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.id} — {m.title}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <button
-                      onClick={() => applyDelta(0, -step)}
-                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
-                      disabled={!editMode || !canEditLayer}
-                      title="Вверх"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      onClick={() => applyDelta(-step, 0)}
-                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
-                      disabled={!editMode || !canEditLayer}
-                      title="Влево"
-                    >
-                      ←
-                    </button>
-                    <button
-                      onClick={() => applyDelta(step, 0)}
-                      className="rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
-                      disabled={!editMode || !canEditLayer}
-                      title="Вправо"
-                    >
-                      →
-                    </button>
-                    <button
-                      onClick={() => applyDelta(0, step)}
-                      className="col-span-3 rounded-2xl px-3 py-2 text-[12px] font-extrabold text-white/85 ring-1 ring-white/14 hover:bg-white/10"
-                      disabled={!editMode || !canEditLayer}
-                      title="Вниз"
-                    >
-                      ↓
-                    </button>
-                  </div>
-
-                  <div className="mt-3 text-[12px] text-white/55">Доступность: {canEditLayer ? 'OK' : 'слой неактивен'}</div>
-                </div>
-
-                <div className="mt-3 rounded-2xl bg-white/5 p-3 ring-1 ring-white/10">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[12px] font-semibold text-white/80">Offsets JSON</div>
-                    <button
-                      onClick={copyDump}
-                      className="rounded-2xl px-3 py-2 text-[12px] font-bold text-white/80 ring-1 ring-white/14 hover:bg-white/10"
-                      title="Скопировать в буфер"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                  <textarea
-                    readOnly
-                    value={offsetsDump}
-                    className="mt-2 h-[160px] w-full resize-none rounded-2xl bg-black/25 p-3 text-[11px] text-white/75 ring-1 ring-white/10 outline-none"
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {fit && (
           <>
@@ -2063,7 +1789,7 @@ export default function SlideAerial() {
                 ...dissolveMaskStyle,
               }}
             >
-              <img src={mapImg} alt="Аэроснимок участка" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+              <img src={mapImg} alt="Аэроснимок участка" decoding="async" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
 
               <svg ref={svgRef} viewBox={IMAGE_VIEWBOX} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full">
                 <defs>
@@ -2084,65 +1810,23 @@ export default function SlideAerial() {
                             const scale = off.scale ?? p.transform?.scale ?? 1
                             const t = scale !== 1 ? `translate(${off.x} ${off.y}) scale(${scale})` : `translate(${off.x} ${off.y})`
 
-                            const allowDrag =
-                              editorOpen &&
-                              editMode &&
-                              editLayer === 'potential' &&
-                              canShowPotentialNow &&
-                              ((potentialTarget === 'scheme' && (mode === 'scheme' || mode === 'none')) ||
-                                (potentialTarget === 'mezh' && mode === 'mezh'))
-
-                            const onPointerDown = (e: React.PointerEvent) => {
-                              if (!allowDrag) return
-                              e.preventDefault()
-                              e.stopPropagation()
-                              setSelectedPotentialId(p.id)
-                              const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
-                              if (!pt) return
-                              beginDrag('potential', p.id, pt)
-                              ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
-                            }
-
-                            const onPointerMove = (e: React.PointerEvent) => {
-                              if (!allowDrag) return
-                              const dr = dragRef.current
-                              if (!dr?.dragging || dr.kind !== 'potential') return
-                              const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
-                              if (!pt) return
-                              moveDrag(pt)
-                            }
-
-                            const onPointerUp = () => endDrag()
-
                             return (
-                              <g key={p.id} transform={t} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+                              <g key={p.id} transform={t}>
                                 <path
                                   d={p.d}
                                   fill={p.fill}
-                                  stroke={isSel && allowDrag ? 'rgba(255,255,255,0.95)' : p.stroke}
-                                  strokeWidth={(p.strokeWidth ?? 5) + (isSel && allowDrag ? 1 : 0)}
+                                  stroke={isSel ? 'rgba(255,255,255,0.95)' : p.stroke}
+                                  strokeWidth={(p.strokeWidth ?? 5) + (isSel ? 1 : 0)}
                                   vectorEffect="non-scaling-stroke"
                                   filter="url(#glow)"
-                                  opacity={isSel && allowDrag ? 0.98 : 0.92}
+                                  opacity={isSel ? 0.98 : 0.92}
                                 />
-                                {isSel && allowDrag && (
-                                  <path
-                                    d={p.d}
-                                    fill="none"
-                                    stroke="rgba(165,241,91,0.75)"
-                                    strokeWidth={6}
-                                    opacity={0.25}
-                                    vectorEffect="non-scaling-stroke"
-                                    filter="url(#glow)"
-                                  />
-                                )}
                               </g>
                             )
                           })}
                         </g>
                       )}
 
-                      {/* parcel outline только в scheme */}
                       {mode === 'scheme' && (
                         <path
                           d={PARCEL_PATH_DETAIL}
@@ -2154,7 +1838,6 @@ export default function SlideAerial() {
                         />
                       )}
 
-                      {/* mezh только в mezh */}
                       {mode === 'mezh' && (
                         <g>
                           <g>
@@ -2179,8 +1862,6 @@ export default function SlideAerial() {
                               const scale = off.scale ?? z.transform?.scale ?? 1
                               const t = scale !== 1 ? `translate(${off.x} ${off.y}) scale(${scale})` : `translate(${off.x} ${off.y})`
 
-                              const allowDrag = editorOpen && editMode && editLayer === 'mezh' && mode === 'mezh'
-
                               const hasOwnerFocus = !!activeOwnerSet
                               const isOwnerZone = hasOwnerFocus ? activeOwnerSet!.has(z.id) : false
                               const isDimmed = hasOwnerFocus && !isOwnerZone
@@ -2189,58 +1870,24 @@ export default function SlideAerial() {
                               const stroke = isDimmed ? 'rgba(255,255,255,0.18)' : z.stroke
                               const baseOpacity = isDimmed ? 0.78 : 0.9
 
-                              const onPointerDown = (e: React.PointerEvent) => {
-                                if (!allowDrag) return
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setSelectedZoneId(z.id)
-                                const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
-                                if (!pt) return
-                                beginDrag('mezh', z.id, pt)
-                                ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
-                              }
-
-                              const onPointerMove = (e: React.PointerEvent) => {
-                                if (!allowDrag) return
-                                const dr = dragRef.current
-                                if (!dr?.dragging || dr.kind !== 'mezh') return
-                                const pt = clientToSvgFrom(svgRef.current, e.clientX, e.clientY)
-                                if (!pt) return
-                                moveDrag(pt)
-                              }
-
-                              const onPointerUp = () => endDrag()
-
                               return (
-                                <g key={z.id} transform={t} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+                                <g key={z.id} transform={t}>
                                   <path
                                     d={z.d}
                                     fill={fill}
-                                    stroke={isSel && allowDrag ? 'rgba(255,255,255,0.95)' : stroke}
-                                    strokeWidth={(z.strokeWidth ?? 3) + (isSel && allowDrag ? 1 : 0)}
+                                    stroke={isSel ? 'rgba(255,255,255,0.95)' : stroke}
+                                    strokeWidth={(z.strokeWidth ?? 3) + (isSel ? 1 : 0)}
                                     vectorEffect="non-scaling-stroke"
-                                    opacity={isSel && allowDrag ? 0.95 : baseOpacity}
+                                    opacity={isSel ? 0.95 : baseOpacity}
                                   />
 
-                                  {hasOwnerFocus && isOwnerZone && !allowDrag && (
+                                  {hasOwnerFocus && isOwnerZone && (
                                     <path
                                       d={z.d}
                                       fill="none"
                                       stroke="rgba(255,255,255,0.90)"
                                       strokeWidth={6}
                                       opacity={0.42}
-                                      vectorEffect="non-scaling-stroke"
-                                      filter="url(#glow)"
-                                    />
-                                  )}
-
-                                  {isSel && allowDrag && (
-                                    <path
-                                      d={z.d}
-                                      fill="none"
-                                      stroke="rgba(71, 18, 217, 0.75)"
-                                      strokeWidth={6}
-                                      opacity={0.35}
                                       vectorEffect="non-scaling-stroke"
                                       filter="url(#glow)"
                                     />
@@ -2333,29 +1980,6 @@ export default function SlideAerial() {
 
                       const allowDrag = editorOpen && editMode && editLayer === 'markerPin' && mode === 'scheme'
 
-                      const onPointerDown = (e: React.PointerEvent<SVGGElement>) => {
-                        if (!allowDrag) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setSelectedMarkerId(m.id)
-                        setActiveMarker(m.id)
-                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
-                        if (!pt) return
-                        beginDrag('markerPin', m.id, pt)
-                        ;(e.currentTarget as unknown as Element).setPointerCapture?.(e.pointerId)
-                      }
-
-                      const onPointerMove = (e: React.PointerEvent<SVGGElement>) => {
-                        if (!allowDrag) return
-                        const dr = dragRef.current
-                        if (!dr?.dragging || dr.kind !== 'markerPin') return
-                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
-                        if (!pt) return
-                        moveDrag(pt)
-                      }
-
-                      const onPointerUp = () => endDrag()
-
                       const onMarkerClick = () => {
                         setActiveZone(null)
                         setSelectedMarkerId(m.id)
@@ -2371,9 +1995,6 @@ export default function SlideAerial() {
                           active={activeMarker === m.id || selectedMarkerId === m.id}
                           editing={allowDrag}
                           onClick={onMarkerClick}
-                          onPointerDown={allowDrag ? onPointerDown : undefined}
-                          onPointerMove={allowDrag ? onPointerMove : undefined}
-                          onPointerUp={allowDrag ? onPointerUp : undefined}
                         />
                       )
                     })}
@@ -2391,145 +2012,226 @@ export default function SlideAerial() {
                         setActiveZone((prev) => (prev === z.id ? null : z.id))
                       }
 
-                      return (
-                        <PremiumMarker key={`zone-${z.id}`} x={c.x} y={c.y} active={activeZone === z.id} editing={false} onClick={onZoneClick} />
-                      )
+                      return <PremiumMarker key={`zone-${z.id}`} x={c.x} y={c.y} active={activeZone === z.id} editing={false} onClick={onZoneClick} />
                     })}
                   </g>
                 )}
 
-                {/* ✅ карточки маркеров и зон */}
-                <AnimatePresence>
-                  {activeMarkerData &&
-                    isMarkerVisible(activeMarkerData.id) &&
-                    (() => {
-                      const mo = markerOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
-                      const mx = activeMarkerData.x + mo.x
-                      const my = activeMarkerData.y + mo.y
+                {/* ✅ карточки: SVG-версия ТОЛЬКО НЕ-Safari */}
+                {!useHtmlMarkerCards && (
+                  <AnimatePresence>
+                    {activeMarkerData &&
+                      isMarkerVisible(activeMarkerData.id) &&
+                      (() => {
+                        const mo = markerOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
+                        const mx = activeMarkerData.x + mo.x
+                        const my = activeMarkerData.y + mo.y
 
-                      const BASE_CARD = { x: 36, y: -230 }
-                      const co = markerCardOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
+                        const BASE_CARD = { x: 36, y: -230 }
+                        const co = markerCardOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
 
-                      const margin = 18
-                      const cardW = Math.max(280, Math.min(480, vb.w * 0.92))
-                      const cardH = Math.max(160, Math.min(220, vb.h * 0.42))
+                        const margin = 18
+                        const cardW = Math.max(280, Math.min(480, vb.w * 0.92))
+                        const cardH = Math.max(160, Math.min(220, vb.h * 0.42))
 
-                      let cx = mx + BASE_CARD.x + co.x
-                      let cy = my + BASE_CARD.y + co.y
-                      let side: 'left' | 'right' = 'left'
+                        let cx = mx + BASE_CARD.x + co.x
+                        let cy = my + BASE_CARD.y + co.y
+                        let side: 'left' | 'right' = 'left'
 
-                      if (cx + cardW > vb.maxX - margin) {
-                        cx = mx - BASE_CARD.x - cardW + co.x
-                        side = 'right'
-                      }
+                        if (cx + cardW > vb.maxX - margin) {
+                          cx = mx - BASE_CARD.x - cardW + co.x
+                          side = 'right'
+                        }
 
-                      if (cy < vb.minY + margin) {
-                        cy = my + 38 + co.y
-                      }
+                        if (cy < vb.minY + margin) {
+                          cy = my + 38 + co.y
+                        }
 
-                      cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
-                      cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
+                        cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
+                        cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
 
-                      const allowDragCard = editorOpen && editMode && editLayer === 'markerCard' && mode === 'scheme'
+                        const allowDragCard = editorOpen && editMode && editLayer === 'markerCard' && mode === 'scheme'
 
-                      const onCardPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-                        if (!allowDragCard) return
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setSelectedMarkerId(activeMarkerData.id)
-                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
-                        if (!pt) return
-                        beginDrag('markerCard', activeMarkerData.id, pt)
-                        e.currentTarget.setPointerCapture(e.pointerId)
-                      }
+                        return (
+                          <MarkerCard
+                            key={activeMarkerData.id}
+                            x={cx}
+                            y={cy}
+                            width={cardW}
+                            height={cardH}
+                            title={activeMarkerData.title}
+                            lines={activeMarkerData.lines}
+                            onClose={() => setActiveMarker(null)}
+                            editing={allowDragCard}
+                            pointerSide={side}
+                          />
+                        )
+                      })()}
 
-                      const onCardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-                        if (!allowDragCard) return
-                        const dr = dragRef.current
-                        if (!dr?.dragging || dr.kind !== 'markerCard') return
-                        const pt = clientToSvgFrom(markersSvgRef.current, e.clientX, e.clientY)
-                        if (!pt) return
-                        moveDrag(pt)
-                      }
+                    {mode === 'mezh' &&
+                      !editMode &&
+                      activeZone &&
+                      activeZoneCard &&
+                      (() => {
+                        const z = MEZH_ZONES.find((x) => x.id === activeZone)
+                        if (!z) return null
 
-                      const onCardPointerUp = () => endDrag()
+                        const { x: mx, y: my } = getZoneCenter(z)
 
-                      return (
-                        <MarkerCard
-                          key={activeMarkerData.id}
-                          x={cx}
-                          y={cy}
-                          width={cardW}
-                          height={cardH}
-                          title={activeMarkerData.title}
-                          lines={activeMarkerData.lines}
-                          onClose={() => setActiveMarker(null)}
-                          editing={allowDragCard}
-                          pointerSide={side}
-                          onPointerDown={allowDragCard ? onCardPointerDown : undefined}
-                          onPointerMove={allowDragCard ? onCardPointerMove : undefined}
-                          onPointerUp={allowDragCard ? onCardPointerUp : undefined}
-                        />
-                      )
-                    })()}
+                        const BASE_CARD = { x: 44, y: -260 }
+                        const margin = 18
 
-                  {mode === 'mezh' &&
-                    !editMode &&
-                    activeZone &&
-                    activeZoneCard &&
-                    (() => {
-                      const z = MEZH_ZONES.find((x) => x.id === activeZone)
-                      if (!z) return null
+                        const cardW = Math.max(320, Math.min(520, vb.w * 0.78))
+                        const cardH = Math.max(210, Math.min(280, vb.h * 0.52))
 
-                      const { x: mx, y: my } = getZoneCenter(z)
+                        let cx = mx + BASE_CARD.x
+                        let cy = my + BASE_CARD.y
+                        let side: 'left' | 'right' = 'left'
 
-                      const BASE_CARD = { x: 44, y: -260 }
-                      const margin = 18
+                        if (cx + cardW > vb.maxX - margin) {
+                          cx = mx - BASE_CARD.x - cardW
+                          side = 'right'
+                        }
 
-                      const cardW = Math.max(320, Math.min(520, vb.w * 0.78))
-                      const cardH = Math.max(210, Math.min(280, vb.h * 0.52))
+                        if (cy < vb.minY + margin) {
+                          cy = my + 38
+                        }
 
-                      let cx = mx + BASE_CARD.x
-                      let cy = my + BASE_CARD.y
-                      let side: 'left' | 'right' = 'left'
+                        cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
+                        cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
 
-                      if (cx + cardW > vb.maxX - margin) {
-                        cx = mx - BASE_CARD.x - cardW
-                        side = 'right'
-                      }
-
-                      if (cy < vb.minY + margin) {
-                        cy = my + 38
-                      }
-
-                      cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
-                      cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
-
-                      return (
-                        <MarkerCard
-                          key={`zone-card-${activeZone}`}
-                          x={cx}
-                          y={cy}
-                          width={cardW}
-                          height={cardH}
-                          title={activeZoneCard.title}
-                          lines={activeZoneCard.lines}
-                          onClose={() => setActiveZone(null)}
-                          editing={false}
-                          pointerSide={side}
-                        />
-                      )
-                    })()}
-                </AnimatePresence>
+                        return (
+                          <MarkerCard
+                            key={`zone-card-${activeZone}`}
+                            x={cx}
+                            y={cy}
+                            width={cardW}
+                            height={cardH}
+                            title={activeZoneCard.title}
+                            lines={activeZoneCard.lines}
+                            onClose={() => setActiveZone(null)}
+                            editing={false}
+                            pointerSide={side}
+                          />
+                        )
+                      })()}
+                  </AnimatePresence>
+                )}
               </svg>
+
+              {/* ✅ карточки: HTML-оверлей ТОЛЬКО Safari/WebKit */}
+              {useHtmlMarkerCards && fit && svgGeom && (
+                <div className="absolute inset-0" style={{ pointerEvents: 'none', overflow: 'visible' }}>
+                  <AnimatePresence>
+                    {activeMarkerData &&
+                      isMarkerVisible(activeMarkerData.id) &&
+                      (() => {
+                        const mo = markerOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
+                        const mx = activeMarkerData.x + mo.x
+                        const my = activeMarkerData.y + mo.y
+
+                        const BASE_CARD = { x: 36, y: -230 }
+                        const co = markerCardOffsets[activeMarkerData.id] ?? { x: 0, y: 0 }
+
+                        const margin = 18
+                        const cardW = Math.max(280, Math.min(480, vb.w * 0.92))
+                        const cardH = Math.max(160, Math.min(220, vb.h * 0.42))
+
+                        let cx = mx + BASE_CARD.x + co.x
+                        let cy = my + BASE_CARD.y + co.y
+                        let side: 'left' | 'right' = 'left'
+
+                        if (cx + cardW > vb.maxX - margin) {
+                          cx = mx - BASE_CARD.x - cardW + co.x
+                          side = 'right'
+                        }
+
+                        if (cy < vb.minY + margin) {
+                          cy = my + 38 + co.y
+                        }
+
+                        cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
+                        cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
+
+                        const allowDragCard = editorOpen && editMode && editLayer === 'markerCard' && mode === 'scheme'
+                        const px = svgToPx(cx, cy)
+
+                        return (
+                          <MarkerCardHtml
+                            key={`html-${activeMarkerData.id}`}
+                            leftPx={px.x}
+                            topPx={px.y}
+                            scale={px.scale}
+                            width={cardW}
+                            height={cardH}
+                            title={activeMarkerData.title}
+                            lines={activeMarkerData.lines}
+                            onClose={() => setActiveMarker(null)}
+                            editing={allowDragCard}
+                            pointerSide={side}
+                          />
+                        )
+                      })()}
+
+                    {mode === 'mezh' &&
+                      !editMode &&
+                      activeZone &&
+                      activeZoneCard &&
+                      (() => {
+                        const z = MEZH_ZONES.find((x) => x.id === activeZone)
+                        if (!z) return null
+                        const { x: mx, y: my } = getZoneCenter(z)
+
+                        const BASE_CARD = { x: 44, y: -260 }
+                        const margin = 18
+
+                        const cardW = Math.max(320, Math.min(520, vb.w * 0.78))
+                        const cardH = Math.max(210, Math.min(280, vb.h * 0.52))
+
+                        let cx = mx + BASE_CARD.x
+                        let cy = my + BASE_CARD.y
+                        let side: 'left' | 'right' = 'left'
+
+                        if (cx + cardW > vb.maxX - margin) {
+                          cx = mx - BASE_CARD.x - cardW
+                          side = 'right'
+                        }
+
+                        if (cy < vb.minY + margin) {
+                          cy = my + 38
+                        }
+
+                        cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
+                        cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
+
+                        const px = svgToPx(cx, cy)
+
+                        return (
+                          <MarkerCardHtml
+                            key={`html-zone-${activeZone}`}
+                            leftPx={px.x}
+                            topPx={px.y}
+                            scale={px.scale}
+                            width={cardW}
+                            height={cardH}
+                            title={activeZoneCard.title}
+                            lines={activeZoneCard.lines}
+                            onClose={() => setActiveZone(null)}
+                            editing={false}
+                            pointerSide={side}
+                          />
+                        )
+                      })()}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
           </>
         )}
 
         {/* ✅ Нижняя тонкая панель */}
-        <div className="pointer-events-none absolute inset-x-0  bottom-5 z-[80] ">
-
-          <div className="pointer-events-auto mx-auto flex w-fit items-center  gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
+        <div className="pointer-events-none absolute inset-x-0 bottom-5 z-[80]">
+          <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
             <button
               onClick={deck.prev}
               className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"

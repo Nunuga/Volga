@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
+// ✅ для SVG <foreignObject> иногда нужен XHTML namespace.
+// React/TS типы не знают про атрибут xmlns на div, поэтому пробрасываем его через any.
+const XHTML_NS = { xmlns: 'http://www.w3.org/1999/xhtml' }
+
 type Plot = {
   id: string
   title: string
@@ -159,7 +163,7 @@ export default function RiverPlan() {
                 exit={{ opacity: 0, y: 10, scale: 0.98 }}
                 transition={{ duration: 0.22 }}
               >
-                <div xmlns="http://www.w3.org/1999/xhtml" className="glass rounded-2xl p-3 shadow-glow">
+                <div {...(XHTML_NS as any)} className="glass rounded-2xl p-3 shadow-glow">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-xs font-semibold text-white">{activePlot.title}</div>

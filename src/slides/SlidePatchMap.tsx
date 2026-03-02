@@ -1,19 +1,19 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import mapImg from '../assets/map4.png'
+import mapImg from '../assets/map4.webp'
 import { IMAGE_VIEWBOX } from '../data/parcelPaths'
-import c1_1 from '../assets/c1-1.png'
-import c1_2 from '../assets/c1-2.png'
-import c1_3 from '../assets/c1-3.png'
-import c1_4 from '../assets/c1-4.png'
-import c3_1 from '../assets/c3-1.png'
-import c3_2 from '../assets/c3-2.png'
-import c2_1 from '../assets/c2-1.jpeg'
-import c2_2 from '../assets/c2-2.jpeg'
-import c2_3 from '../assets/c2-3.jpeg'
-import c4_1 from '../assets/c4-1.png'
-import c5_1 from '../assets/c5-1.png'
-import c5_2 from '../assets/c5-2.png'
+import c1_1 from '../assets/c1-1.webp'
+import c1_2 from '../assets/c1-2.webp'
+import c1_3 from '../assets/c1-3.webp'
+import c1_4 from '../assets/c1-4.webp'
+import c3_1 from '../assets/c3-1.webp'
+import c3_2 from '../assets/c3-2.webp'
+import c2_1 from '../assets/c2-1.webp'
+import c2_2 from '../assets/c2-2.webp'
+import c2_3 from '../assets/c2-3.webp'
+import c4_1 from '../assets/c4-1.webp'
+import c5_1 from '../assets/c5-1.webp'
+import c5_2 from '../assets/c5-2.webp'
 
 type FitBox = { left: number; top: number; width: number; height: number; cw: number; ch: number }
 type PinVariant = 'default' | 'mine'
@@ -342,7 +342,16 @@ function PhotoModal({
 
             <div className="relative">
               <div className="relative h-[min(70vh,640px)] w-full bg-black/30">
-                {hasImages ? <img src={images[safeIdx]} alt="" draggable={false} className="h-full w-full select-none object-contain" /> : null}
+                {hasImages ? (
+                  <img
+                    src={images[safeIdx]}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                    className="h-full w-full select-none object-contain"
+                  />
+                ) : null}
               </div>
 
               {hasImages && images.length > 1 && (
@@ -381,7 +390,7 @@ function PhotoModal({
                       style={{ borderColor: active ? 'rgba(165,241,91,0.55)' : 'rgba(255,255,255,0.12)' }}
                       title="Открыть фото"
                     >
-                      <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />
+                      <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
                     </button>
                   )
                 })}
@@ -501,7 +510,14 @@ function PanelCard({
               }}
               title="Открыть фото"
             >
-              <img src={images[safeIdx]} alt="" draggable={false} className="h-full w-full object-cover" />
+              <img
+                src={images[safeIdx]}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+                className="h-full w-full object-cover"
+              />
               <div
                 className="pointer-events-none absolute inset-0"
                 style={{
@@ -533,7 +549,7 @@ function PanelCard({
                     }}
                     title="Открыть фото"
                   >
-                    <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />
+                    <img src={src} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
                   </button>
                 )
               })}
@@ -966,7 +982,15 @@ export default function SlidePatchMap() {
         </div>
 
         {/* preload natural sizes */}
-        <img ref={imgRef} src={mapImg} alt="" className="absolute pointer-events-none opacity-0" aria-hidden="true" onLoad={recalc} />
+        <img
+          ref={imgRef}
+          src={mapImg}
+          alt=""
+          decoding="async"
+          className="absolute pointer-events-none opacity-0"
+          aria-hidden="true"
+          onLoad={recalc}
+        />
 
         {fit && (
           <>
@@ -981,7 +1005,7 @@ export default function SlidePatchMap() {
                 ...dissolveMaskStyle,
               }}
             >
-              <img src={mapImg} alt="Карта" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+              <img src={mapImg} alt="Карта" decoding="async" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(165,241,91,0.10),transparent_62%)]" />
             </div>
 

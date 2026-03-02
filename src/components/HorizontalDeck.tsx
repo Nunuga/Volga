@@ -17,6 +17,11 @@ export default function HorizontalDeck({
 
   const slides = useMemo(() => Children.toArray(children), [children])
 
+  // ✅ Виртуализация: монтируем только активный слайд.
+  // Это резко снижает нагрузку на стартовую загрузку (карты/изображения не тянут сеть и CPU заранее).
+  const shouldRenderSlide = (i: number) => i === active
+  const SlidePlaceholder = () => <div className="h-full w-full bg-eco-gradient noise" aria-hidden="true" />
+
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -36,7 +41,9 @@ export default function HorizontalDeck({
     if (!el) return
     const onScroll = () => {
       const width = el.clientWidth
-      const idx = Math.round(el.scrollLeft / width)
+      // ✅ чуть раньше переключаем active, чтобы следующий слайд успевал смонтироваться
+      // (иначе при виртуализации можно увидеть «пустой» участок во время скролла)
+      const idx = Math.floor((el.scrollLeft + width * 0.9) / width)
       setActive(Math.max(0, Math.min(count - 1, idx)))
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -69,7 +76,7 @@ export default function HorizontalDeck({
                 className="relative h-full w-screen flex-shrink-0"
                 style={{ scrollSnapAlign: 'start' }}
               >
-                {s}
+                {shouldRenderSlide(i) ? s : <SlidePlaceholder />}
               </section>
             ))}
           </div>
