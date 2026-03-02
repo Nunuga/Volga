@@ -20,7 +20,7 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen bg-volga-night text-white">
-      <HorizontalDeck hideDotsOn={[1]}>
+      <HorizontalDeck hideDotsOn={[1,2]}>
         <Suspense fallback={<div className="h-full w-full bg-eco-gradient noise" />}>
           <SlideHero />
         </Suspense>

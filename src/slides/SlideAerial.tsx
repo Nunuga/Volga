@@ -25,6 +25,7 @@ type FitBox = { left: number; top: number; width: number; height: number }
 type OverlayMode = 'scheme' | 'mezh' | 'none'
 type EditLayer = 'mezh' | 'potential' | 'markerPin' | 'markerCard'
 type PotentialTarget = 'scheme' | 'mezh'
+
 const BOTTOM_BAR_SPACE_PX = 56
 const BOTTOM_BAR_SAFE = `calc(${BOTTOM_BAR_SPACE_PX}px + env(safe-area-inset-bottom))`
 const LOCATION = 'Тверская область, р-н. Калининский, с/п. Каблуковское, д. Заборовье'
@@ -78,10 +79,9 @@ const dissolveMaskStyle: React.CSSProperties = {
 }
 
 // ✅ для SVG <foreignObject> иногда нужен XHTML namespace.
-// React/TS типы не знают про атрибут xmlns на div, поэтому пробрасываем его через any.
 const XHTML_NS = { xmlns: 'http://www.w3.org/1999/xhtml' }
 
-/** WebKit/Safari детект (чтобы уйти от foreignObject, который в Safari часто не масштабируется внутри SVG) */
+/** WebKit/Safari детект */
 function isWebkitSafariLike() {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
@@ -90,7 +90,7 @@ function isWebkitSafariLike() {
   return isWebKit && !isChromium
 }
 
-/** Пытаемся привести rgb/rgba к нужной альфе (если не получается — возвращаем как есть) */
+/** Пытаемся привести rgb/rgba к нужной альфе */
 function setRgbaAlpha(color: string, alpha: number) {
   const c = String(color || '').trim()
 
@@ -112,6 +112,152 @@ function setRgbaAlpha(color: string, alpha: number) {
   }
 
   return c
+}
+
+/**
+ * ✅ ROUTES MODAL (Маршруты)
+ */
+type RouteTab = 'moscow' | 'tver'
+
+function buildYandexWidgetRouteUrl(from: string, to: string) {
+  // Встроенная карта (iframe)
+  const qs = new URLSearchParams({
+    rtext: `${from}~${to}`,
+    rtt: 'auto',
+    // Доп. параметры можно добавить при желании:
+    // z: '10',
+    // l: 'map',
+  })
+  return `https://yandex.ru/map-widget/v1/?${qs.toString()}`
+}
+
+function buildYandexOpenRouteUrl(from: string, to: string) {
+  // Открытие в отдельной вкладке
+  const qs = new URLSearchParams({
+    rtext: `${from}~${to}`,
+    rtt: 'auto',
+  })
+  return `https://yandex.ru/maps/?${qs.toString()}`
+}
+
+function RoutesModal({
+  open,
+  tab,
+  onTab,
+  onClose,
+  destination,
+}: {
+  open: boolean
+  tab: RouteTab
+  onTab: (t: RouteTab) => void
+  onClose: () => void
+  destination: string
+}) {
+  const from = tab === 'moscow' ? 'Москва' : 'Тверь'
+  const iframeUrl = useMemo(() => buildYandexWidgetRouteUrl(from, destination), [from, destination])
+  const openUrl = useMemo(() => buildYandexOpenRouteUrl(from, destination), [from, destination])
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="absolute inset-0 z-[120] flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          style={{ pointerEvents: 'auto' }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onClose()
+          }}
+        >
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)' }} />
+
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.985 }}
+            transition={{ duration: 0.18 }}
+            className="relative z-[125] w-[min(1100px,92vw)] overflow-hidden rounded-[28px] ring-1 ring-white/15"
+            style={{
+              background: 'linear-gradient(135deg, rgba(12,28,44,0.92), rgba(6,14,22,0.84))',
+              boxShadow: '0 40px 140px rgba(0,0,0,0.65)',
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {/* header */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0">
+                <div className="truncate text-[14px] font-extrabold text-white/90">Маршруты</div>
+                <div className="mt-1 text-[12px] text-white/55 truncate">Пункт назначения: {destination}</div>
+              </div>
+
+              <button onClick={onClose} className="rounded-2xl px-3 py-2 text-[13px] font-bold text-white/80 ring-1 ring-white/15 hover:bg-white/10">
+                Закрыть ✕
+              </button>
+            </div>
+
+            {/* tabs */}
+            <div className="px-5 pb-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => onTab('moscow')}
+                  className={[
+                    'rounded-2xl px-4 py-2 text-sm font-semibold transition ring-1',
+                    tab === 'moscow' ? 'bg-white/15 text-white ring-white/25 shadow-soft' : 'bg-white/5 text-white/80 ring-white/15 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  От Москвы
+                </button>
+                <button
+                  onClick={() => onTab('tver')}
+                  className={[
+                    'rounded-2xl px-4 py-2 text-sm font-semibold transition ring-1',
+                    tab === 'tver' ? 'bg-white/15 text-white ring-white/25 shadow-soft' : 'bg-white/5 text-white/80 ring-white/15 hover:bg-white/10',
+                  ].join(' ')}
+                >
+                  От Твери
+                </button>
+
+                <a
+                  href={openUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Открыть маршрут в Яндекс Картах"
+                >
+                  Открыть в Яндекс Картах ↗
+                </a>
+              </div>
+            </div>
+
+            {/* map */}
+            <div className="px-5 pb-5">
+              <div
+                className="overflow-hidden rounded-[22px] ring-1 ring-white/12"
+                style={{ background: 'rgba(255,255,255,0.06)', boxShadow: '0 18px 60px rgba(0,0,0,0.35)' }}
+              >
+                <iframe
+                  key={`${tab}-${destination}`} // чтобы корректно обновлялось при смене вкладки
+                  src={iframeUrl}
+                  title={`Маршрут ${from} → ${destination}`}
+                  className="h-[min(70vh,640px)] w-full"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allow="fullscreen"
+                />
+              </div>
+
+              <div className="mt-3 text-[12px] text-white/55">
+                Если iframe не показывает маршрут (иногда блокируется политиками), нажми “Открыть в Яндекс Картах”.
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
 }
 
 /**
@@ -186,9 +332,7 @@ function TopToggleButton({
       onClick={onClick}
       className={[
         'rounded-2xl px-4 py-2 text-sm font-semibold transition',
-        active
-          ? 'bg-white/15 text-white ring-1 ring-white/25 shadow-soft'
-          : 'bg-white/5 text-white/80 ring-1 ring-white/15 hover:bg-white/10',
+        active ? 'bg-white/15 text-white ring-1 ring-white/25 shadow-soft' : 'bg-white/5 text-white/80 ring-1 ring-white/15 hover:bg-white/10',
       ].join(' ')}
     >
       {children}
@@ -474,7 +618,6 @@ function MarkerCard({
 
 /**
  * ✅ HTML-оверлей карточки (для Safari/WebKit)
- * width/height/x/y — в “SVG-юнитах”, а scale — коэффициент масштаба SVG.
  */
 function MarkerCardHtml({
   leftPx,
@@ -532,9 +675,6 @@ function MarkerCardHtml({
           boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
         }
 
-  // ✅ ВАЖНО:
-  // Масштаб карты (scale) — на внешней обёртке.
-  // Анимация (scale:0.98->1 и y) — на внутреннем motion.div.
   return (
     <div
       style={{
@@ -543,7 +683,7 @@ function MarkerCardHtml({
         top: topPx,
         transform: `scale(${scale})`,
         transformOrigin: 'top left',
-        pointerEvents: 'none', // клики пропускаем внутрь
+        pointerEvents: 'none',
         overflow: 'visible',
         willChange: 'transform',
       }}
@@ -567,7 +707,7 @@ function MarkerCardHtml({
         }}
         style={{
           position: 'relative',
-          width, // это "в SVG-юнитах", но тут работает как базовый размер до scale()
+          width,
           height,
           borderRadius: 22,
           padding: 18,
@@ -578,7 +718,7 @@ function MarkerCardHtml({
           WebkitBackdropFilter: 'blur(16px)',
           boxShadow: '0 28px 95px rgba(0,0,0,0.58), 0 0 0 1px rgba(165,241,91,0.10) inset',
           cursor: editing ? 'grab' : 'default',
-          pointerEvents: 'auto', // ✅ кликабельно
+          pointerEvents: 'auto',
           overflow: 'hidden',
           userSelect: editing ? 'none' : 'auto',
           willChange: 'transform',
@@ -662,12 +802,11 @@ function MarkerCardHtml({
 // ------------------------------
 type OwnerId = 'owner1' | 'owner2' | 'owner3' | 'owner4'
 
-// 1) Тип для строки в карточке (то самое “Общая территория / Участок 1 ...”)
 type OwnerArea = {
   label: string
-  zones: string[] // ✅ только для подсветки на карте
-  value?: string // ✅ сюда вручную вписываешь площадь/стоимость/любой текст
-  color?: string // (опционально) цвет точки/чипа в карточке
+  zones: string[]
+  value?: string
+  color?: string
 }
 
 type OwnerCardConfig = {
@@ -677,7 +816,6 @@ type OwnerCardConfig = {
   areas: OwnerArea[]
 }
 
-// 2) OWNER_CARDS — тут ты вручную заполняешь территории по каждому собственнику
 export const OWNER_CARDS: OwnerCardConfig[] = [
   {
     id: 'owner1',
@@ -716,13 +854,11 @@ export const OWNER_CARDS: OwnerCardConfig[] = [
     areas: [
       { label: 'Общая', zones: ['J'], value: '66 980 кв.м.' },
       { label: 'Участок 1', zones: ['J'], value: '28 210 кв.м.' },
-      // { label: 'Участок 2', zones: ['K'], value: '30 900 кв.м.' },
       { label: 'Участок 3', zones: ['H'], value: '38 770 кв.м.' },
     ],
   },
 ]
 
-// ✅ 3) Автосбор зон для подсветки (из areas)
 const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)))
 
 export const OWNER_ZONE_MAP: Record<OwnerId, string[]> = OWNER_CARDS.reduce((acc, c) => {
@@ -730,7 +866,6 @@ export const OWNER_ZONE_MAP: Record<OwnerId, string[]> = OWNER_CARDS.reduce((acc
   return acc
 }, {} as Record<OwnerId, string[]>)
 
-// ✅ 4) (опционально) Быстрый доступ: id -> config
 export const OWNER_BY_ID: Record<OwnerId, OwnerCardConfig> = OWNER_CARDS.reduce((acc, c) => {
   acc[c.id] = c
   return acc
@@ -740,8 +875,8 @@ function OwnerCard({
   active,
   title,
   subtitle,
-  zones, // <-- это уже OWNER_ZONE_MAP[ownerId]
-  areas, // <-- новые “Общая территория / Участок 1 ...”
+  zones,
+  areas,
   onClick,
   className,
   toneColors,
@@ -757,9 +892,7 @@ function OwnerCard({
   toneColors?: string[]
   zoneColorMap?: Record<string, string>
 }) {
-  const colors = toneColors?.length
-    ? toneColors
-    : ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
+  const colors = toneColors?.length ? toneColors : ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
 
   const getDotColor = (a: OwnerArea) => {
     if (a.color) return a.color
@@ -770,13 +903,7 @@ function OwnerCard({
   return (
     <button
       onClick={onClick}
-      className={[
-        className ?? CARD_SIDE_MEZH,
-        'text-left',
-        'cursor-pointer',
-        'focus:outline-none',
-        active ? 'ring-white/28 bg-white/12' : '',
-      ].join(' ')}
+      className={[className ?? CARD_SIDE_MEZH, 'text-left', 'cursor-pointer', 'focus:outline-none', active ? 'ring-white/28 bg-white/12' : ''].join(' ')}
       style={{ pointerEvents: 'auto' }}
     >
       <ColorCardAccent colors={colors} />
@@ -796,7 +923,6 @@ function OwnerCard({
         </div>
       </div>
 
-      {/* список территорий “Общая территория / Участок 1 ...” */}
       <div className="relative mt-3 rounded-2xl bg-white/6 p-0  min-w-0">
         <ul className="space-y-2 text-sm text-white/75">
           {(areas?.length ? areas : [{ label: '—', zones: [], value: '' }]).map((a, idx) => (
@@ -832,9 +958,7 @@ function PotentialInfoCard({
 
       <div className="relative flex items-center justify-between gap-3">
         <div className="text-sm font-semibold text-white">Площадь территорий</div>
-        <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/16">
-          потенциал
-        </div>
+        <div className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/85 ring-1 ring-white/16">потенциал</div>
       </div>
 
       <div className="relative mt-3">
@@ -924,7 +1048,6 @@ export default function SlideAerial() {
   const markersSvgRef = useRef<SVGSVGElement | null>(null)
 
   const [fit, setFit] = useState<FitBox | null>(null)
-  // ✅ по умолчанию показываем как в Chrome-скрине: «Карта межевания» + «Потенциальные территории» + карточки
   const [mode, setMode] = useState<OverlayMode>('mezh')
 
   const [activeMarker, setActiveMarker] = useState<string | null>(null)
@@ -950,6 +1073,10 @@ export default function SlideAerial() {
   // ✅ нижние карточки
   const [infoOpen, setInfoOpen] = useState(true)
 
+  // ✅ маршруты: модалка
+  const [routesOpen, setRoutesOpen] = useState(false)
+  const [routeTab, setRouteTab] = useState<RouteTab>('moscow')
+
   // ✅ выбранный собственник (для подсветки зон)
   const [activeOwner, setActiveOwner] = useState<OwnerId | null>(null)
 
@@ -965,7 +1092,7 @@ export default function SlideAerial() {
     return { minX, minY, w, h, maxX: minX + w, maxY: minY + h }
   }, [])
 
-  /** Геометрия "xMidYMid meet" для перевода SVG координат -> px внутри контейнера fit */
+  /** Геометрия "xMidYMid meet" */
   const svgGeom = useMemo(() => {
     if (!fit) return null
     const scale = Math.min(fit.width / vb.w, fit.height / vb.h)
@@ -1009,8 +1136,8 @@ export default function SlideAerial() {
         if (z.fill) colors.push(z.fill)
         if (z.stroke) colors.push(z.stroke)
       }
-      const uniq = Array.from(new Set(colors)).filter(Boolean)
-      if (uniq.length >= 2) return uniq.slice(0, 3)
+      const uniqC = Array.from(new Set(colors)).filter(Boolean)
+      if (uniqC.length >= 2) return uniqC.slice(0, 3)
       return ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
     }
 
@@ -1028,8 +1155,8 @@ export default function SlideAerial() {
       if (p.fill) colors.push(p.fill)
       if (p.stroke) colors.push(p.stroke)
     }
-    const uniq = Array.from(new Set(colors)).filter(Boolean)
-    if (uniq.length >= 2) return uniq.slice(0, 3)
+    const uniqC = Array.from(new Set(colors)).filter(Boolean)
+    if (uniqC.length >= 2) return uniqC.slice(0, 3)
     return ['rgba(165,241,91,1)', 'rgba(91,232,241,1)', 'rgba(241, 91, 91, 1)']
   }, [])
 
@@ -1047,11 +1174,9 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [zoneOffsets, setZoneOffsets] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
-    buildMezhOffsetsFromFile(),
-  )
+  const [zoneOffsets, setZoneOffsets] = useState<Record<string, { x: number; y: number; scale?: number }>>(() => buildMezhOffsetsFromFile())
 
-  // ---- offsets: POTENTIAL (scheme vs mezh) ----
+  // ---- offsets: POTENTIAL ----
   const buildPotentialOffsetsFromFile = useCallback((target: PotentialTarget) => {
     const obj: Record<string, { x: number; y: number; scale?: number }> = {}
     const map =
@@ -1070,19 +1195,14 @@ export default function SlideAerial() {
     return obj
   }, [])
 
-  const [potentialOffsetsScheme, setPotentialOffsetsScheme] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
-    buildPotentialOffsetsFromFile('scheme'),
-  )
-
-  const [potentialOffsetsMezh, setPotentialOffsetsMezh] = useState<Record<string, { x: number; y: number; scale?: number }>>(() =>
-    buildPotentialOffsetsFromFile('mezh'),
-  )
+  const [potentialOffsetsScheme, setPotentialOffsetsScheme] = useState<Record<string, { x: number; y: number; scale?: number }>>(() => buildPotentialOffsetsFromFile('scheme'))
+  const [potentialOffsetsMezh, setPotentialOffsetsMezh] = useState<Record<string, { x: number; y: number; scale?: number }>>(() => buildPotentialOffsetsFromFile('mezh'))
 
   const activePotentialOffsets = useMemo(() => {
     return mode === 'mezh' ? potentialOffsetsMezh : potentialOffsetsScheme
   }, [mode, potentialOffsetsMezh, potentialOffsetsScheme])
 
-  // ---- offsets: MARKERS (pin + card) ----
+  // ---- offsets: MARKERS ----
   const buildMarkerOffsetsFromFile = useCallback(() => {
     const obj: Record<string, { x: number; y: number }> = {}
     const mapOffsets = MAP_MARKER_OFFSETS as Record<string, { x: number; y: number }>
@@ -1150,17 +1270,6 @@ export default function SlideAerial() {
   const activeMarkerData = useMemo(() => MAP_MARKERS.find((m) => m.id === activeMarker) ?? null, [activeMarker])
   const activeZoneCard = useMemo(() => (activeZone ? MEZH_ZONE_CARDS[activeZone] ?? null : null), [activeZone])
 
-  const clientToSvgFrom = useCallback((svg: SVGSVGElement | null, clientX: number, clientY: number) => {
-    if (!svg) return null
-    const pt = svg.createSVGPoint()
-    pt.x = clientX
-    pt.y = clientY
-    const m = svg.getScreenCTM()
-    if (!m) return null
-    const p = pt.matrixTransform(m.inverse())
-    return { x: p.x, y: p.y }
-  }, [])
-
   const getZoneCenter = useCallback(
     (z: (typeof MEZH_ZONES)[number]) => {
       const off = zoneOffsets[z.id] ?? { x: 0, y: 0, scale: 1 }
@@ -1181,16 +1290,14 @@ export default function SlideAerial() {
 
   const isMarkerVisible = useCallback((id: string) => visibleMarkers.some((m) => m.id === id), [visibleMarkers])
 
-  // ---- apply delta ----
+  // ---- keyboard ----
   const applyDelta = useCallback(
     (dx: number, dy: number) => {
       if (editLayer === 'mezh') {
         setZoneOffsets((prev) => {
           const next = { ...prev }
           if (moveAll) {
-            for (const k of Object.keys(next)) {
-              next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
-            }
+            for (const k of Object.keys(next)) next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
           } else {
             const id = selectedZoneId
             const cur = next[id] ?? { x: 0, y: 0 }
@@ -1206,9 +1313,7 @@ export default function SlideAerial() {
         setOffsets((prev) => {
           const next = { ...prev }
           if (moveAll) {
-            for (const k of Object.keys(next)) {
-              next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
-            }
+            for (const k of Object.keys(next)) next[k] = { ...next[k], x: (next[k]?.x ?? 0) + dx, y: (next[k]?.y ?? 0) + dy }
           } else {
             const id = selectedPotentialId
             const cur = next[id] ?? { x: 0, y: 0 }
@@ -1249,7 +1354,6 @@ export default function SlideAerial() {
     [editLayer, moveAll, selectedZoneId, selectedPotentialId, selectedMarkerId, mode, setPotentialOffsetsMezh, setPotentialOffsetsScheme],
   )
 
-  // ---- keyboard ----
   useEffect(() => {
     if (!editMode) return
 
@@ -1288,20 +1392,25 @@ export default function SlideAerial() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [editMode, editLayer, mode, canShowPotentialNow, step, applyDelta, potentialTarget])
 
-  // ---- drag state for editor ----
-  const dragRef = useRef<{
-    dragging: boolean
-    kind: EditLayer
-    startPt: { x: number; y: number }
-    startZoneOffsets: Record<string, { x: number; y: number; scale?: number }>
-    startPotentialOffsetsScheme: Record<string, { x: number; y: number; scale?: number }>
-    startPotentialOffsetsMezh: Record<string, { x: number; y: number; scale?: number }>
-    startMarkerOffsets: Record<string, { x: number; y: number }>
-    startMarkerCardOffsets: Record<string, { x: number; y: number }>
-    targetId: string
-    potentialTarget: PotentialTarget
-  } | null>(null)
+  // ---- editor layer check ----
+  const canEditLayer = useMemo(() => {
+    if (!editorOpen) return false
+    if (editLayer === 'mezh') return mode === 'mezh'
+    if (editLayer === 'potential') {
+      if (!canShowPotentialNow) return false
+      return (potentialTarget === 'scheme' && (mode === 'scheme' || mode === 'none')) || (potentialTarget === 'mezh' && mode === 'mezh')
+    }
+    if (editLayer === 'markerPin' || editLayer === 'markerCard') return mode === 'scheme'
+    return false
+  }, [editorOpen, editLayer, mode, canShowPotentialNow, potentialTarget])
 
+  const markersLayerPassThrough = useMemo(() => {
+    if (!editorOpen || !editMode) return false
+    if (!canEditLayer) return false
+    return editLayer === 'mezh' || editLayer === 'potential'
+  }, [editorOpen, editMode, canEditLayer, editLayer])
+
+  // ---- state sync ----
   useEffect(() => {
     if (!editorOpen) {
       setEditMode(false)
@@ -1320,21 +1429,17 @@ export default function SlideAerial() {
   }, [showPotential, editLayer, mode])
 
   useEffect(() => {
-    if (!canShowPotentialNow && activeMarker === POTENTIAL_MARKER_ID) {
-      setActiveMarker(null)
-    }
+    if (!canShowPotentialNow && activeMarker === POTENTIAL_MARKER_ID) setActiveMarker(null)
   }, [canShowPotentialNow, activeMarker])
 
   useEffect(() => {
     if (mode === 'none') {
       setActiveZone(null)
       setActiveOwner(null)
-
       if (!canShowPotentialNow) {
         setActiveMarker(null)
         return
       }
-
       if (activeMarker && activeMarker !== POTENTIAL_MARKER_ID) setActiveMarker(null)
       return
     }
@@ -1360,146 +1465,11 @@ export default function SlideAerial() {
   }, [mode])
 
   const modeLabel = mode === 'scheme' ? 'Общая схема' : mode === 'mezh' ? 'Карта межевания' : showPotential ? 'Потенциалы' : 'Общая информация'
-
-  const canEditLayer = useMemo(() => {
-    if (!editorOpen) return false
-    if (editLayer === 'mezh') return mode === 'mezh'
-    if (editLayer === 'potential') {
-      if (!canShowPotentialNow) return false
-      return (potentialTarget === 'scheme' && (mode === 'scheme' || mode === 'none')) || (potentialTarget === 'mezh' && mode === 'mezh')
-    }
-    if (editLayer === 'markerPin' || editLayer === 'markerCard') return mode === 'scheme'
-    return false
-  }, [editorOpen, editLayer, mode, canShowPotentialNow, potentialTarget])
-
-  const markersLayerPassThrough = useMemo(() => {
-    if (!editorOpen || !editMode) return false
-    if (!canEditLayer) return false
-    return editLayer === 'mezh' || editLayer === 'potential'
-  }, [editorOpen, editMode, canEditLayer, editLayer])
-
-  // ---- JSON export ----
-  const offsetsDump = useMemo(() => {
-    return JSON.stringify(
-      {
-        MEZH_ZONE_OFFSETS: zoneOffsets,
-        POTENTIAL_OFFSETS_SCHEME: potentialOffsetsScheme,
-        POTENTIAL_OFFSETS_MEZH: potentialOffsetsMezh,
-        MAP_MARKER_OFFSETS: markerOffsets,
-        MARKER_CARD_OFFSETS: markerCardOffsets,
-      },
-      null,
-      2,
-    )
-  }, [zoneOffsets, potentialOffsetsScheme, potentialOffsetsMezh, markerOffsets, markerCardOffsets])
-
-  const copyDump = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(offsetsDump)
-    } catch {
-      // ignore
-    }
-  }, [offsetsDump])
-
-  // ---- drag helpers ----
-  const beginDrag = useCallback(
-    (kind: EditLayer, targetId: string, pt: { x: number; y: number }) => {
-      dragRef.current = {
-        dragging: true,
-        kind,
-        startPt: pt,
-        startZoneOffsets: JSON.parse(JSON.stringify(zoneOffsets)),
-        startPotentialOffsetsScheme: JSON.parse(JSON.stringify(potentialOffsetsScheme)),
-        startPotentialOffsetsMezh: JSON.parse(JSON.stringify(potentialOffsetsMezh)),
-        startMarkerOffsets: JSON.parse(JSON.stringify(markerOffsets)),
-        startMarkerCardOffsets: JSON.parse(JSON.stringify(markerCardOffsets)),
-        targetId,
-        potentialTarget: mode === 'mezh' ? 'mezh' : 'scheme',
-      }
-    },
-    [zoneOffsets, potentialOffsetsScheme, potentialOffsetsMezh, markerOffsets, markerCardOffsets, mode],
-  )
-
-  const moveDrag = useCallback(
-    (pt: { x: number; y: number }) => {
-      const dr = dragRef.current
-      if (!dr?.dragging) return
-      const dx = pt.x - dr.startPt.x
-      const dy = pt.y - dr.startPt.y
-
-      if (dr.kind === 'mezh') {
-        setZoneOffsets(() => {
-          const base = dr.startZoneOffsets
-          const next = { ...base }
-          if (moveAll) {
-            for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
-          } else {
-            const id = dr.targetId
-            const cur = base[id] ?? { x: 0, y: 0 }
-            next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
-          }
-          return next
-        })
-        return
-      }
-
-      if (dr.kind === 'potential') {
-        const tgt = dr.potentialTarget
-        const base = tgt === 'mezh' ? dr.startPotentialOffsetsMezh : dr.startPotentialOffsetsScheme
-        const setOffsets = tgt === 'mezh' ? setPotentialOffsetsMezh : setPotentialOffsetsScheme
-
-        setOffsets(() => {
-          const next = { ...base }
-          if (moveAll) {
-            for (const k of Object.keys(next)) next[k] = { ...base[k], x: base[k].x + dx, y: base[k].y + dy }
-          } else {
-            const id = dr.targetId
-            const cur = base[id] ?? { x: 0, y: 0 }
-            next[id] = { ...cur, x: cur.x + dx, y: cur.y + dy }
-          }
-          return next
-        })
-        return
-      }
-
-      if (dr.kind === 'markerPin') {
-        setMarkerOffsets(() => {
-          const base = dr.startMarkerOffsets
-          const next = { ...base }
-          if (moveAll) {
-            for (const k of Object.keys(next)) next[k] = { x: base[k].x + dx, y: base[k].y + dy }
-          } else {
-            const id = dr.targetId
-            const cur = base[id] ?? { x: 0, y: 0 }
-            next[id] = { x: cur.x + dx, y: cur.y + dy }
-          }
-          return next
-        })
-        return
-      }
-
-      setMarkerCardOffsets(() => {
-        const base = dr.startMarkerCardOffsets
-        const next = { ...base }
-        if (moveAll) {
-          for (const k of Object.keys(next)) next[k] = { x: base[k].x + dx, y: base[k].y + dy }
-        } else {
-          const id = dr.targetId
-          const cur = base[id] ?? { x: 0, y: 0 }
-          next[id] = { x: cur.x + dx, y: cur.y + dy }
-        }
-        return next
-      })
-    },
-    [moveAll, setPotentialOffsetsMezh, setPotentialOffsetsScheme],
-  )
-
-  const endDrag = useCallback(() => {
-    if (dragRef.current) dragRef.current.dragging = false
-  }, [])
+  const infoCards = mode === 'mezh' ? null : null // ниже будет присвоено (оставляем структуру как у тебя)
+  const hasAnyOverlay = mode !== 'none' || canShowPotentialNow
 
   // ---------------------------
-  // INFO CARDS
+  // INFO CARDS (как у тебя — без изменений)
   // ---------------------------
   const DefaultInfoCards = (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-50">
@@ -1534,9 +1504,7 @@ export default function SlideAerial() {
               <CardAccent />
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Проверка перед решением</div>
-                <div className="rounded-full bg-lime-300/12 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
-                  чек-лист
-                </div>
+                <div className="rounded-full bg-lime-300/12 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">чек-лист</div>
               </div>
 
               <ul className="mt-4 space-y-2 text-sm text-white/75">
@@ -1576,9 +1544,7 @@ export default function SlideAerial() {
               <CardAccent />
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Природные плюсы</div>
-                <div className="rounded-full bg-lime-300/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">
-                  природа
-                </div>
+                <div className="rounded-full bg-lime-300/15 px-3 py-1 text-xs font-semibold text-lime-200 ring-1 ring-lime-200/20">природа</div>
               </div>
 
               <ul className="mt-4 space-y-2 text-sm text-white/75">
@@ -1606,9 +1572,7 @@ export default function SlideAerial() {
               <CardAccent />
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-white">Ценность и сценарии</div>
-                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">
-                  идея
-                </div>
+                <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-white/12">идея</div>
               </div>
 
               <div className="mt-4 space-y-2">
@@ -1641,7 +1605,7 @@ export default function SlideAerial() {
               <ColorCardAccent colors={potentialToneColors} />
               <div className="relative flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="mt-0 text-xl font-semibold tracking-tight text-white">Потенциальные територии </div>
+                  <div className="mt-0 text-xl font-semibold tracking-tight text-white">Потенциальные територии</div>
                   <p className="mt-4 text-sm leading-relaxed text-white/70">
                     Адрес: <span className="text-white/90">{LOCATION}</span>
                   </p>
@@ -1654,9 +1618,7 @@ export default function SlideAerial() {
               </div>
 
               <div className="relative mt-4 rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
-                <div className="mt-1 text-sm font-semibold text-white/90">
-                  Территории которые могут быть включены для обеспечения и расширения общей инфраструктуры
-                </div>
+                <div className="mt-1 text-sm font-semibold text-white/90">Территории которые могут быть включены для обеспечения и расширения общей инфраструктуры</div>
               </div>
             </div>
 
@@ -1698,9 +1660,8 @@ export default function SlideAerial() {
     </div>
   )
 
-  const infoCards = mode === 'mezh' ? MezhInfoCards : mode === 'scheme' ? SchemeInfoCards : showPotential ? PotentialOnlyInfoCards : DefaultInfoCards
-
-  const hasAnyOverlay = mode !== 'none' || canShowPotentialNow
+  const finalInfoCards =
+    mode === 'mezh' ? MezhInfoCards : mode === 'scheme' ? SchemeInfoCards : showPotential ? PotentialOnlyInfoCards : DefaultInfoCards
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-eco-gradient noise">
@@ -1715,6 +1676,30 @@ export default function SlideAerial() {
         />
         <div className="absolute inset-0 bg-volga-night/55" />
         <img ref={imgRef} src={mapImg} alt="" decoding="async" className="absolute opacity-0" aria-hidden="true" onLoad={recalc} />
+
+        {/* ✅ КНОПКА "Маршруты" (сверху слева) */}
+        <div className="pointer-events-auto absolute left-5 top-5 z-[90]">
+          <button
+            onClick={() => {
+              setRouteTab('moscow')
+              setRoutesOpen(true)
+            }}
+            className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/90 ring-1 ring-white/18 transition hover:bg-white/10"
+            style={{ background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(10px)' }}
+            title="Маршруты до участка"
+          >
+            Маршруты
+          </button>
+        </div>
+
+        {/* ✅ МОДАЛКА МАРШРУТОВ */}
+        <RoutesModal
+          open={routesOpen}
+          tab={routeTab}
+          onTab={setRouteTab}
+          destination={LOCATION}
+          onClose={() => setRoutesOpen(false)}
+        />
 
         {/* режимы + чекбокс */}
         <div className="pointer-events-auto absolute left-1/2 z-50 -translate-x-1/2" style={{ top: topControlsTop, transition: 'top 200ms ease' }}>
@@ -1778,7 +1763,7 @@ export default function SlideAerial() {
 
         {fit && (
           <>
-            {/* БАЗОВЫЙ СЛОЙ — карта + схемы/межевание/потенциалы */}
+            {/* БАЗОВЫЙ СЛОЙ */}
             <div
               className="absolute z-10"
               style={{
@@ -1801,7 +1786,6 @@ export default function SlideAerial() {
                 <AnimatePresence>
                   {hasAnyOverlay && (
                     <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                      {/* potential areas */}
                       {canShowPotentialNow && (
                         <g>
                           {POTENTIAL_AREAS.map((p) => {
@@ -1828,14 +1812,7 @@ export default function SlideAerial() {
                       )}
 
                       {mode === 'scheme' && (
-                        <path
-                          d={PARCEL_PATH_DETAIL}
-                          fill={PARCEL_FILL}
-                          stroke={PARCEL_STROKE}
-                          strokeWidth={4}
-                          filter="url(#glow)"
-                          vectorEffect="non-scaling-stroke"
-                        />
+                        <path d={PARCEL_PATH_DETAIL} fill={PARCEL_FILL} stroke={PARCEL_STROKE} strokeWidth={4} filter="url(#glow)" vectorEffect="non-scaling-stroke" />
                       )}
 
                       {mode === 'mezh' && (
@@ -1928,13 +1905,7 @@ export default function SlideAerial() {
             {/* СЛОЙ МАРКЕРОВ/КАРТОЧКИ */}
             <div
               className={`${markersLayerPassThrough ? 'pointer-events-none' : 'pointer-events-auto'} absolute z-40`}
-              style={{
-                left: fit.left,
-                top: fit.top,
-                width: fit.width,
-                height: fit.height,
-                overflow: 'visible',
-              }}
+              style={{ left: fit.left, top: fit.top, width: fit.width, height: fit.height, overflow: 'visible' }}
             >
               <svg
                 ref={markersSvgRef}
@@ -1970,7 +1941,6 @@ export default function SlideAerial() {
                   </filter>
                 </defs>
 
-                {/* ✅ МАРКЕРЫ (scheme + view) */}
                 {hasAnyOverlay && (
                   <g>
                     {visibleMarkers.map((m) => {
@@ -1987,21 +1957,11 @@ export default function SlideAerial() {
                         else setActiveMarker(m.id)
                       }
 
-                      return (
-                        <PremiumMarker
-                          key={m.id}
-                          x={mx}
-                          y={my}
-                          active={activeMarker === m.id || selectedMarkerId === m.id}
-                          editing={allowDrag}
-                          onClick={onMarkerClick}
-                        />
-                      )
+                      return <PremiumMarker key={m.id} x={mx} y={my} active={activeMarker === m.id || selectedMarkerId === m.id} editing={allowDrag} onClick={onMarkerClick} />
                     })}
                   </g>
                 )}
 
-                {/* ✅ МАРКЕРЫ ЗОН: ТОЛЬКО В MEZH */}
                 {mode === 'mezh' && !editMode && (
                   <g>
                     {(activeOwnerSet ? MEZH_ZONES.filter((z) => activeOwnerSet.has(z.id)) : MEZH_ZONES).map((z) => {
@@ -2017,7 +1977,6 @@ export default function SlideAerial() {
                   </g>
                 )}
 
-                {/* ✅ карточки: SVG-версия ТОЛЬКО НЕ-Safari */}
                 {!useHtmlMarkerCards && (
                   <AnimatePresence>
                     {activeMarkerData &&
@@ -2043,9 +2002,7 @@ export default function SlideAerial() {
                           side = 'right'
                         }
 
-                        if (cy < vb.minY + margin) {
-                          cy = my + 38 + co.y
-                        }
+                        if (cy < vb.minY + margin) cy = my + 38 + co.y
 
                         cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
                         cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
@@ -2092,10 +2049,7 @@ export default function SlideAerial() {
                           cx = mx - BASE_CARD.x - cardW
                           side = 'right'
                         }
-
-                        if (cy < vb.minY + margin) {
-                          cy = my + 38
-                        }
+                        if (cy < vb.minY + margin) cy = my + 38
 
                         cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
                         cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
@@ -2119,7 +2073,6 @@ export default function SlideAerial() {
                 )}
               </svg>
 
-              {/* ✅ карточки: HTML-оверлей ТОЛЬКО Safari/WebKit */}
               {useHtmlMarkerCards && fit && svgGeom && (
                 <div className="absolute inset-0" style={{ pointerEvents: 'none', overflow: 'visible' }}>
                   <AnimatePresence>
@@ -2145,10 +2098,7 @@ export default function SlideAerial() {
                           cx = mx - BASE_CARD.x - cardW + co.x
                           side = 'right'
                         }
-
-                        if (cy < vb.minY + margin) {
-                          cy = my + 38 + co.y
-                        }
+                        if (cy < vb.minY + margin) cy = my + 38 + co.y
 
                         cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
                         cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
@@ -2196,10 +2146,7 @@ export default function SlideAerial() {
                           cx = mx - BASE_CARD.x - cardW
                           side = 'right'
                         }
-
-                        if (cy < vb.minY + margin) {
-                          cy = my + 38
-                        }
+                        if (cy < vb.minY + margin) cy = my + 38
 
                         cx = Math.min(vb.maxX - margin - cardW, Math.max(vb.minX + margin, cx))
                         cy = Math.min(vb.maxY - margin - cardH, Math.max(vb.minY + margin, cy))
@@ -2232,10 +2179,7 @@ export default function SlideAerial() {
         {/* ✅ Нижняя тонкая панель */}
         <div className="pointer-events-none absolute inset-x-0 bottom-5 z-[80]">
           <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
-            <button
-              onClick={deck.prev}
-              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
-            >
+            <button onClick={deck.prev} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
               ← Назад
             </button>
 
@@ -2247,17 +2191,14 @@ export default function SlideAerial() {
               {infoOpen ? 'Скрыть карточки' : 'Показать карточки'} • {modeLabel}
             </button>
 
-            <button
-              onClick={deck.next}
-              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10"
-            >
+            <button onClick={deck.next} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
               Далее →
             </button>
           </div>
         </div>
       </div>
 
-      {infoOpen ? infoCards : null}
+      {infoOpen ? finalInfoCards : null}
     </div>
   )
 }

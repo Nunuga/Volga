@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import mapImg from '../assets/map4.webp'
 import { IMAGE_VIEWBOX } from '../data/parcelPaths'
+import { useDeck } from '../components/deckContext'
 import c1_1 from '../assets/c1-1.webp'
 import c1_2 from '../assets/c1-2.webp'
 import c1_3 from '../assets/c1-3.webp'
@@ -108,17 +109,9 @@ function PremiumMarker({
   const isMine = variant === 'mine'
   const emphasized = isMine || active || selected
 
-  const accent = isMine
-    ? 'rgba(255, 214, 70, 0.98)'
-    : emphasized
-      ? 'rgba(255, 70, 90, 0.98)'
-      : 'rgba(90, 255, 245, 0.92)'
+  const accent = isMine ? 'rgba(255, 214, 70, 0.98)' : emphasized ? 'rgba(255, 70, 90, 0.98)' : 'rgba(90, 255, 245, 0.92)'
 
-  const accentSoft = isMine
-    ? 'rgba(255, 214, 70, 0.42)'
-    : emphasized
-      ? 'rgba(255, 70, 90, 0.55)'
-      : 'rgba(90, 255, 245, 0.34)'
+  const accentSoft = isMine ? 'rgba(255, 214, 70, 0.42)' : emphasized ? 'rgba(255, 70, 90, 0.55)' : 'rgba(90, 255, 245, 0.34)'
 
   const scale = isMine ? 1.22 : selected ? 1.38 : active ? 1.24 : 1.14
   const pulseFast = selected ? 0.95 : 1.25
@@ -187,8 +180,6 @@ function PremiumMarker({
           </>
         )}
 
-        {/* <ellipse cx="0" cy="34" rx="22" ry="9" fill="rgba(0,0,0,0.40)" /> */}
-
         <g filter={isMine ? 'url(#pinGlowMine)' : 'url(#pinGlow)'} opacity={0.995}>
           <path
             d="
@@ -202,9 +193,7 @@ function PremiumMarker({
             fill={isMine ? 'url(#pinBodyMine)' : 'url(#pinBody)'}
           />
 
-          {/* <circle cx="0" cy="-44" r="18" fill={isMine ? 'url(#pinHeadMine)' : 'url(#pinHead)'} filter="url(#pinShadow)" /> */}
           <circle cx="-6" cy="-52" r="5.6" fill="rgba(255,255,255,0.62)" />
-          {/* <circle cx="0" cy="-44" r="7.2" fill="rgba(10,18,28,0.55)" /> */}
 
           <motion.circle
             cx="0"
@@ -245,7 +234,7 @@ function PremiumMarker({
           <g transform="translate(0 -92)">
             <rect x={48} y={35} width={310} height={38} rx={14} fill="rgba(12,28,44,0.74)" stroke="rgba(255,255,255,0.18)" />
             <text x={200} y={60} textAnchor="middle" fill="rgba(255,255,255,0.94)" fontSize={25} fontWeight={900} fontFamily="ui-sans-serif">
-              Реализуемая территория 
+              Реализуемая территория
             </text>
           </g>
         )}
@@ -343,14 +332,7 @@ function PhotoModal({
             <div className="relative">
               <div className="relative h-[min(70vh,640px)] w-full bg-black/30">
                 {hasImages ? (
-                  <img
-                    src={images[safeIdx]}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    draggable={false}
-                    className="h-full w-full select-none object-contain"
-                  />
+                  <img src={images[safeIdx]} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full select-none object-contain" />
                 ) : null}
               </div>
 
@@ -404,7 +386,7 @@ function PhotoModal({
 }
 
 /**
- * ✅ Карточка — убраны “серые полосы” (ring/внутренние полосы). Оставлен нормальный border.
+ * ✅ Карточка
  */
 function PanelCard({
   pin,
@@ -441,11 +423,7 @@ function PanelCard({
       style={{
         background: bg,
         // border: `1px solid ${borderColor}`,
-        boxShadow: selected
-          ? '0 40px 110px rgba(0,0,0,0.72)'
-          : active
-            ? '0 30px 90px rgba(0,0,0,0.62)'
-            : '0 18px 55px rgba(0,0,0,0.48)',
+        boxShadow: selected ? '0 40px 110px rgba(0,0,0,0.72)' : active ? '0 30px 90px rgba(0,0,0,0.62)' : '0 18px 55px rgba(0,0,0,0.48)',
         backdropFilter: 'blur(18px)',
       }}
       animate={{ scale: selected ? 1.01 : 1 }}
@@ -485,7 +463,7 @@ function PanelCard({
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2  rounded-2xl px-4 py-3 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
-                style={{boxShadow: '0 1px 12px rgba(12, 106, 113, 0.55)' }}
+                style={{ boxShadow: '0 1px 12px rgba(12, 106, 113, 0.55)' }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {pin.ctaLabel ?? 'Открыть'} ↗
@@ -510,14 +488,7 @@ function PanelCard({
               }}
               title="Открыть фото"
             >
-              <img
-                src={images[safeIdx]}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                draggable={false}
-                className="h-full w-full object-cover"
-              />
+              <img src={images[safeIdx]} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover" />
               <div
                 className="pointer-events-none absolute inset-0"
                 style={{
@@ -592,7 +563,7 @@ const COMPARE_PINS_FALLBACK: Pin[] = [
     x: 5.19,
     y: -462.06,
     title: 'Коттеджный посёлок «Премиальный курорт Port Emm Zavidovo (Порт Эмм Завидово)»',
-    lines: ['Застройщик • Самолет','Площади земельного участка • от 8 до 10 соток','Дома • от 193,25 м² до 399,1 м².', 'Цена • от 49 682 884 до 93 523 108 ₽'],
+    lines: ['Застройщик • Самолет', 'Площади земельного участка • от 8 до 10 соток', 'Дома • от 193,25 м² до 399,1 м².', 'Цена • от 49 682 884 до 93 523 108 ₽'],
     href: 'https://samolet.ru/houses/port-emm/?utm_referrer=https://www.google.com/',
     ctaLabel: 'Открыть',
     images: [c2_1, c2_2, c2_3],
@@ -602,17 +573,17 @@ const COMPARE_PINS_FALLBACK: Pin[] = [
     x: 610.14,
     y: -310.05,
     title: 'Коттеджный поселок «Екатериновка»',
-    lines: ['Площади земельного участка • от 10 до 80 соток','Дома • от 194 м² до 808 м².','Цена • от 18 800 000 до 258 000 000 ₽'],
+    lines: ['Площади земельного участка • от 10 до 80 соток', 'Дома • от 194 м² до 808 м².', 'Цена • от 18 800 000 до 258 000 000 ₽'],
     href: 'https://ekaterinovka.club/',
     ctaLabel: 'Открыть',
-    images: [c1_1,  c1_3, c1_4],
+    images: [c1_1, c1_3, c1_4],
   },
   {
     id: 'c3',
     x: 1438.8,
     y: 900.63,
     title: 'Коттеджный посёлок «Волжский Берег»',
-    lines: ['Площади земельного участка • от 8 до 30 соток','Дома • от 103 м² до 358 м².','Цена • от 15 000 000 до 253 000 000 ₽'],
+    lines: ['Площади земельного участка • от 8 до 30 соток', 'Дома • от 103 м² до 358 м².', 'Цена • от 15 000 000 до 253 000 000 ₽'],
     href: 'https://v-bereg.info/',
     ctaLabel: 'Открыть',
     images: [c3_1, c3_2],
@@ -622,17 +593,17 @@ const COMPARE_PINS_FALLBACK: Pin[] = [
     x: 1366.73,
     y: 904.31,
     title: 'Коттеджный посёлок «Волжские рассветы»',
-    lines: ['Отсутствует выход к Волге','Площади земельного участка • от 10 до 22 соток','Дома • по запросу','Цена • от 8 200 000 до 18 800 000 ₽'],
+    lines: ['Отсутствует выход к Волге', 'Площади земельного участка • от 10 до 22 соток', 'Дома • по запросу', 'Цена • от 8 200 000 до 18 800 000 ₽'],
     href: 'https://vrassveti.ru/',
     ctaLabel: 'Открыть',
-    images: [c4_1,],
+    images: [c4_1],
   },
   {
     id: 'c5',
     x: 1425.67,
     y: 917.24,
     title: 'Коттеджный посёлок «Волга Вилладж»',
-    lines: ['Площади земельного участка • от 11 до 22 соток','Дома • от 172 м² до 540 м².','Цена • от 13 000 000 до 75 000 000 ₽'],
+    lines: ['Площади земельного участка • от 11 до 22 соток', 'Дома • от 172 м² до 540 м².', 'Цена • от 13 000 000 до 75 000 000 ₽'],
     href: 'https://volgavillage.ru/',
     ctaLabel: 'Открыть',
     images: [c5_1, c5_2],
@@ -640,6 +611,9 @@ const COMPARE_PINS_FALLBACK: Pin[] = [
 ]
 
 export default function SlidePatchMap() {
+  const deck = useDeck()
+  const [panelsOpen, setPanelsOpen] = useState(true)
+
   const stageRef = useRef<HTMLDivElement | null>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -658,12 +632,12 @@ export default function SlidePatchMap() {
   const [quoteIdx, setQuoteIdx] = useState(0)
   const [quotePaused, setQuotePaused] = useState(false)
 
-  // ✅ Popup ABSOLUTE (внутри stage) + clamp (не переносится при скролле страниц)
+  // ✅ Popup ABSOLUTE (внутри stage) + clamp
   const popupRef = useRef<HTMLDivElement | null>(null)
   const [popupTick, setPopupTick] = useState(0)
   const [popupPos, setPopupPos] = useState<{ left: number; top: number; placement: 'top' | 'bottom' } | null>(null)
 
-  // ✅ contain: не растягиваем и не обрезаем
+  // ✅ contain
   const recalc = useCallback(() => {
     const stage = stageRef.current
     const img = imgRef.current
@@ -759,7 +733,6 @@ export default function SlidePatchMap() {
   }, [fit, selectedPin])
 
   useEffect(() => {
-    // при смене выбранного — сброс, чтобы без “прыжка”
     setPopupPos(null)
   }, [selectedPin?.id, cardIdx[selectedPin?.id ?? '']])
 
@@ -892,7 +865,7 @@ export default function SlidePatchMap() {
 
   // ✅ re-measure popup when size changes
   useEffect(() => {
-    if (!selectedPin || editorOpen) return
+    if (!selectedPin || editorOpen || !panelsOpen) return
     const bump = () => setPopupTick((t) => t + 1)
     window.addEventListener('resize', bump)
 
@@ -906,11 +879,11 @@ export default function SlidePatchMap() {
       ro.disconnect()
       window.removeEventListener('resize', bump)
     }
-  }, [selectedPin?.id, editorOpen])
+  }, [selectedPin?.id, editorOpen, panelsOpen])
 
-  // ✅ clamp popup (ABSOLUTE внутри stage, + ограничиваем справа до начала растушевки)
+  // ✅ clamp popup
   useLayoutEffect(() => {
-    if (!fit || !popupPx || !selectedPin || editorOpen) return
+    if (!fit || !popupPx || !selectedPin || editorOpen || !panelsOpen) return
     const el = popupRef.current
     if (!el) return
 
@@ -950,7 +923,7 @@ export default function SlidePatchMap() {
     top = clamp(top, minTop, maxTop)
 
     setPopupPos({ left, top, placement })
-  }, [fit?.cw, fit?.ch, fit?.left, fit?.top, popupPx?.x, popupPx?.y, selectedPin?.id, editorOpen, popupTick, cardIdx[selectedPin?.id ?? '']])
+  }, [fit?.cw, fit?.ch, fit?.left, fit?.top, popupPx?.x, popupPx?.y, selectedPin?.id, editorOpen, popupTick, cardIdx[selectedPin?.id ?? ''], panelsOpen])
 
   const togglePin = useCallback((id: string) => {
     setSelectedId((cur) => {
@@ -965,13 +938,7 @@ export default function SlidePatchMap() {
       <div ref={stageRef} className="absolute inset-0 overflow-hidden">
         {/* ✅ Подложка */}
         <div className="absolute inset-0 pointer-events-none" style={dissolveMaskStyle}>
-          <img
-            src={mapImg}
-            alt=""
-            draggable={false}
-            className="absolute inset-0 h-full w-full scale-110 object-cover blur-3xl opacity-55"
-            aria-hidden="true"
-          />
+          <img src={mapImg} alt="" draggable={false} className="absolute inset-0 h-full w-full scale-110 object-cover blur-3xl opacity-55" aria-hidden="true" />
           <div
             className="absolute inset-0"
             style={{
@@ -982,34 +949,17 @@ export default function SlidePatchMap() {
         </div>
 
         {/* preload natural sizes */}
-        <img
-          ref={imgRef}
-          src={mapImg}
-          alt=""
-          decoding="async"
-          className="absolute pointer-events-none opacity-0"
-          aria-hidden="true"
-          onLoad={recalc}
-        />
+        <img ref={imgRef} src={mapImg} alt="" decoding="async" className="absolute pointer-events-none opacity-0" aria-hidden="true" onLoad={recalc} />
 
         {fit && (
           <>
             {/* ✅ основной слой карты (contain, без обрезки) */}
-            <div
-              className="absolute z-10"
-              style={{
-                left: fit.left,
-                top: fit.top,
-                width: fit.width,
-                height: fit.height,
-                ...dissolveMaskStyle,
-              }}
-            >
+            <div className="absolute z-10" style={{ left: fit.left, top: fit.top, width: fit.width, height: fit.height, ...dissolveMaskStyle }}>
               <img src={mapImg} alt="Карта" decoding="async" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(165,241,91,0.10),transparent_62%)]" />
             </div>
 
-            {/* markers layer — поверх всех слоев (кроме карточек/модалки) */}
+            {/* markers layer */}
             <div
               className="pointer-events-auto absolute z-[80]"
               style={{ left: fit.left, top: fit.top, width: fit.width, height: fit.height, overflow: 'visible' }}
@@ -1097,7 +1047,6 @@ export default function SlidePatchMap() {
                               setHoverId(p.id)
                               return
                             }
-                            // ✅ toggle open/close
                             togglePin(p.id)
                           }}
                         />
@@ -1108,9 +1057,9 @@ export default function SlidePatchMap() {
               </svg>
             </div>
 
-            {/* ✅ POPUP карточка — ABSOLUTE, не переносится при скролле страниц */}
+            {/* ✅ POPUP карточка */}
             <AnimatePresence>
-              {!!selectedPin && !editorOpen && (
+              {panelsOpen && !!selectedPin && !editorOpen && (
                 <motion.div
                   ref={popupRef}
                   className="pointer-events-auto absolute"
@@ -1147,127 +1096,85 @@ export default function SlidePatchMap() {
               )}
             </AnimatePresence>
 
-            {/* ✅ RIGHT AREA: цитаты — адаптивный текст + смещение влево до растушевки */}
-            {(() => {
-              const pad = -352
+            {/* ✅ RIGHT AREA: цитаты */}
+            {panelsOpen &&
+              (() => {
+                const pad = -352
+                const safeRight = Math.round(fit.cw * 0.78) - pad
+                const wBase = Math.round(fit.cw * 0.14)
+                const w = clamp(wBase, 420, 760)
+                const left = Math.max(pad, safeRight - w)
+                const top = Math.max(pad, fit.top + pad)
+                const height = Math.max(220, Math.min(fit.ch - pad * 2, fit.height - pad * 2))
 
-              // зона без растушевки: до 78% ширины
-              const safeRight = Math.round(fit.cw * 0.78) - pad
-
-              // ширина панели цитат + clamp
-              const wBase = Math.round(fit.cw * 0.14)
-              const w = clamp(wBase, 420, 760)
-              const left = Math.max(pad, safeRight - w)
-
-              const top = Math.max(pad, fit.top + pad)
-              const height = Math.max(220, Math.min(fit.ch - pad * 2, fit.height - pad * 2))
-
-              return (
-                <div
-                  className="absolute z-[70] pointer-events-auto"
-                  style={{ left, top, width: w, height }}
-                  onMouseEnter={() => setQuotePaused(true)}
-                  onMouseLeave={() => setQuotePaused(false)}
-                >
-                  <div className="relative h-full p-3">
-                    <div className="relative flex h-[calc(100%-56px)] items-center justify-center">
-                      <AnimatePresence mode="wait">
-                        <motion.div
-                          key={`quote-${quoteIdx}`}
-                          className="w-full px-2 py-2"
-                          initial={{ opacity: 0, y: 10, filter: 'blur(6px)' }}
-                          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                          exit={{ opacity: 0, y: -10, filter: 'blur(6px)' }}
-                          transition={{ duration: 0.22 }}
-                        >
-                          <div
-                            className="font-extrabold leading-[1.25] text-white/92"
-                            style={{
-                              fontSize: 'clamp(12px, 1.1vw + 0.8rem, 24px)',
-                              textShadow: '0 18px 70px rgba(0,0,0,0.88)',
-                              wordBreak: 'break-word',
-                            }}
+                return (
+                  <div
+                    className="absolute z-[70] pointer-events-auto"
+                    style={{ left, top, width: w, height }}
+                    onMouseEnter={() => setQuotePaused(true)}
+                    onMouseLeave={() => setQuotePaused(false)}
+                  >
+                    <div className="relative h-full p-3">
+                      <div className="relative flex h-[calc(100%-56px)] items-center justify-center">
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={`quote-${quoteIdx}`}
+                            className="w-full px-2 py-2"
+                            initial={{ opacity: 0, y: 10, filter: 'blur(6px)' }}
+                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                            exit={{ opacity: 0, y: -10, filter: 'blur(6px)' }}
+                            transition={{ duration: 0.22 }}
                           >
-                            “{QUOTES[quoteIdx]?.text ?? ''}”
-                          </div>
-
-                          {(QUOTES[quoteIdx]?.author || QUOTES[quoteIdx]?.sub) && (
                             <div
-                              className="mt-4 font-semibold text-white/75"
+                              className="font-extrabold leading-[1.25] text-white/92"
                               style={{
-                                fontSize: 'clamp(12px, 0.55vw + 0.45rem, 16px)',
-                                textShadow: '0 14px 46px rgba(0,0,0,0.86)',
+                                fontSize: 'clamp(12px, 1.1vw + 0.8rem, 24px)',
+                                textShadow: '0 18px 70px rgba(0,0,0,0.88)',
+                                wordBreak: 'break-word',
                               }}
                             >
-                              {QUOTES[quoteIdx]?.author ? <span className="font-extrabold text-white/85">{QUOTES[quoteIdx]?.author}</span> : null}
-                              {QUOTES[quoteIdx]?.author && QUOTES[quoteIdx]?.sub ? <span className="mx-2 text-white/45">•</span> : null}
-                              {QUOTES[quoteIdx]?.sub ? <span className="text-white/70">{QUOTES[quoteIdx]?.sub}</span> : null}
+                              “{QUOTES[quoteIdx]?.text ?? ''}”
                             </div>
-                          )}
 
-                          {/* <div
-                            className="mt-6 font-semibold text-white/60"
-                            style={{ fontSize: 'clamp(12px, 0.35vw + 0.5rem, 14px)', textShadow: '0 12px 40px rgba(0,0,0,0.86)' }}
-                          >
-                            {quoteIdx + 1}/{Math.max(1, QUOTES.length)}
-                          </div> */}
-                        </motion.div>
-                      </AnimatePresence>
-                    </div>
+                            {(QUOTES[quoteIdx]?.author || QUOTES[quoteIdx]?.sub) && (
+                              <div
+                                className="mt-4 font-semibold text-white/75"
+                                style={{
+                                  fontSize: 'clamp(12px, 0.55vw + 0.45rem, 16px)',
+                                  textShadow: '0 14px 46px rgba(0,0,0,0.86)',
+                                }}
+                              >
+                                {QUOTES[quoteIdx]?.author ? <span className="font-extrabold text-white/85">{QUOTES[quoteIdx]?.author}</span> : null}
+                                {QUOTES[quoteIdx]?.author && QUOTES[quoteIdx]?.sub ? <span className="mx-2 text-white/45">•</span> : null}
+                                {QUOTES[quoteIdx]?.sub ? <span className="text-white/70">{QUOTES[quoteIdx]?.sub}</span> : null}
+                              </div>
+                            )}
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
 
-                    {/* arrows bottom */}
-                    <div className="absolute bottom-3 left-0 right-0 z-10 flex items-center justify-center gap-3">
-                      <button
-                        onClick={prevQuote}
-                        className="rounded-2xl px-4 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
-                        title="Предыдущая"
-                        style={{ background: 'transparent' }}
-                      >
-                        ←
-                      </button>
-                      <button
-                        onClick={nextQuote}
-                        className="rounded-2xl px-4 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
-                        title="Следующая"
-                        style={{ background: 'transparent' }}
-                      >
-                        →
-                      </button>
+                      <div className="absolute bottom-3 left-0 right-0 z-10 flex items-center justify-center gap-3">
+                        <button
+                          onClick={prevQuote}
+                          className="rounded-2xl px-4 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
+                          title="Предыдущая"
+                          style={{ background: 'transparent' }}
+                        >
+                          ←
+                        </button>
+                        <button
+                          onClick={nextQuote}
+                          className="rounded-2xl px-4 py-2 text-[14px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
+                          title="Следующая"
+                          style={{ background: 'transparent' }}
+                        >
+                          →
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })()}
-
-            {/* ✅ TOOLBAR */}
-            {/* <div className="absolute left-4 top-4 z-[85] pointer-events-auto flex gap-2">
-              <button
-                onClick={() => {
-                  setEditorOpen((v) => !v)
-                  setHoverId(null)
-                  setSelectedId(null)
-                  setPopupPos(null)
-                }}
-                className="rounded-2xl px-4 py-3 text-[13px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
-                style={{ background: 'rgba(10,20,30,0.35)', backdropFilter: 'blur(10px)' }}
-                title="Редактор маркеров"
-              >
-                {editorOpen ? 'Редактор: ВЫКЛ' : 'Редактор маркеров'}
-              </button>
-
-              {editorOpen && (
-                <button
-                  onClick={() => {
-                    const vb = parseViewBox(IMAGE_VIEWBOX)
-                    makeNewPin(vb.minX + vb.vbW * 0.5, vb.minY + vb.vbH * 0.5)
-                  }}
-                  className="rounded-2xl px-4 py-3 text-[13px] font-extrabold text-white/90 ring-1 ring-white/15 hover:bg-white/10"
-                  style={{ background: 'rgba(10,20,30,0.35)', backdropFilter: 'blur(10px)' }}
-                >
-                  + Маркер
-                </button>
-              )}
-            </div> */}
+                )
+              })()}
 
             {/* ✅ EDITOR PANEL */}
             <AnimatePresence>
@@ -1289,8 +1196,8 @@ export default function SlidePatchMap() {
                   <div className="p-4">
                     <div className="text-[14px] font-extrabold text-white/90">Редактор маркеров</div>
                     <div className="mt-1 text-[12px] text-white/55">
-                      <span className="font-bold text-white/75">Shift+клик</span> по карте — добавить •{' '}
-                      <span className="font-bold text-white/75">drag</span> маркер — переместить • клик по карте — поставить выбранный
+                      <span className="font-bold text-white/75">Shift+клик</span> по карте — добавить • <span className="font-bold text-white/75">drag</span> маркер —
+                      переместить • клик по карте — поставить выбранный
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2">
@@ -1314,8 +1221,7 @@ export default function SlidePatchMap() {
 
                       <div className="col-span-2">
                         <div className="mt-2 rounded-2xl bg-white/5 px-3 py-2 text-[12px] font-semibold text-white/70 ring-1 ring-white/10">
-                          Координаты:{' '}
-                          <span className="text-white/90">{editingPin ? `${round2(editingPin.x)} , ${round2(editingPin.y)}` : '—'}</span>
+                          Координаты: <span className="text-white/90">{editingPin ? `${round2(editingPin.x)} , ${round2(editingPin.y)}` : '—'}</span>
                         </div>
                       </div>
 
@@ -1408,6 +1314,37 @@ export default function SlidePatchMap() {
             <PhotoModal open={!!modal} title={modalPin?.title ?? ''} images={modalPin?.images ?? []} startIndex={modal?.startIdx ?? 0} onClose={closeModal} />
           </>
         )}
+
+        {/* ✅ Нижняя панель навигации (как на скрине) */}
+        <div className="pointer-events-none absolute inset-x-0 z-[115]" style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+          <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-white/8 px-2 py-2 ring-1 ring-white/14 backdrop-blur-xl shadow-soft">
+            <button onClick={deck.prev} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
+              ← Назад
+            </button>
+
+            {/* <button
+              onClick={() => {
+                setPanelsOpen((v) => {
+                  const next = !v
+                  if (!next) {
+                    setSelectedId(null)
+                    setHoverId(null)
+                    setPopupPos(null)
+                  }
+                  return next
+                })
+              }}
+              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/90 ring-1 ring-white/18 transition hover:bg-white/10"
+              title="Показать/скрыть нижние карточки"
+            >
+              {panelsOpen ? 'Скрыть карточки' : 'Показать карточки'} • Карта сравнения
+            </button>
+
+            <button onClick={deck.next} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
+              Далее →
+            </button> */}
+          </div>
+        </div>
       </div>
     </div>
   )
