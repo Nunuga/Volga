@@ -494,8 +494,8 @@ export const OWNER_CARDS: OwnerCardConfig[] = [
     title: 'Собственник 2',
     subtitle: '',
     areas: [
-      { label: 'Общая', zones: ['C'], value: 'Уточняется' },
-      { label: 'Участок 1', zones: ['C'], value: 'Уточняется' },
+      { label: 'Общая', zones: ['C'], value: '36 727 кв.м.' },
+      { label: 'Участок 1', zones: ['C'], value: '36 727 кв.м.' },
     ],
   },
   {
@@ -512,9 +512,9 @@ export const OWNER_CARDS: OwnerCardConfig[] = [
     title: 'Собственник 4',
     subtitle: '',
     areas: [
-      { label: 'Общая', zones: ['J'], value: '97 880 кв.м.' },
+      { label: 'Общая', zones: ['J'], value: '66 980 кв.м.' },
       { label: 'Участок 1', zones: ['J'], value: '28 210 кв.м.' },
-      { label: 'Участок 2', zones: ['K'], value: '30 900 кв.м.' },
+      // { label: 'Участок 2', zones: ['K'], value: '30 900 кв.м.' },
       { label: 'Участок 3', zones: ['H'], value: '38 770 кв.м.' },
     ],
   },
@@ -752,7 +752,7 @@ function MainInfoCard({ className, compact = false }: { className: string; compa
         <div className="mt-5 grid grid-cols-3 gap-3">
           <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
             <div className="text-[11px] text-white/60">Общая площадь</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">~ 31 ГА</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">~ 30 ГА</div>
           </div>
           <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
             <div className="text-[11px] text-white/60">Время от Москвы</div>
@@ -767,7 +767,7 @@ function MainInfoCard({ className, compact = false }: { className: string; compa
         <div className="mt-5 grid grid-cols-3 gap-3">
           <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
             <div className="text-[11px] text-white/60">Общая площадь</div>
-            <div className="mt-1 text-sm font-semibold text-white/90">~ 31 ГА</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">~ 30 ГА</div>
           </div>
           <div className="rounded-2xl bg-white/6 p-3 ring-1 ring-white/10">
             <div className="text-[11px] text-white/60">Время от Москвы</div>
