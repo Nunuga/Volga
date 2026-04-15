@@ -18,12 +18,7 @@ export default function SlideHero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            {/* <div className="glass inline-flex rounded-2xl px-4 py-3 shadow-soft">
-              <div>
-                <div className="text-xs text-white/60">Премиальная презентация участка</div>
-                <div className="mt-0.5 text-sm font-semibold">Волга • 22 гектара</div>
-              </div>
-            </div> */}
+            
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-6xl">
               Земля на Волге

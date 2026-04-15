@@ -1,4 +1,4 @@
-export type OwnerId = 'owner1' | 'owner2' | 'owner3' | 'owner4'| 'owner5'
+export type OwnerId = 'owner1' | 'owner2' | 'owner3' | 'owner4'| 'owner5'| 'owner6'
 
 export type OwnerArea = {
   label: string
@@ -60,9 +60,19 @@ export const OWNER_CARDS: OwnerCardConfig[] = [
     title: 'Собственник 5',
     subtitle: '',
     areas: [
-      { label: 'Общая', zones: ['J'], value: '6,7га (670 соток)' },
+      // { label: 'Общая', zones: ['J'], value: '6,7га (670 соток)' },
+      // { label: 'Участок 1', zones: ['J'], value: '2,8га (282 сотки)' },
+      { label: 'Участок 1', zones: ['H'], value: '3,9га (388 соток)' },
+    ],
+  },
+  {
+    id: 'owner6',
+    title: 'Собственник 6',
+    subtitle: '',
+    areas: [
+      // { label: 'Общая', zones: ['J'], value: '6,7га (670 соток)' },
       { label: 'Участок 1', zones: ['J'], value: '2,8га (282 сотки)' },
-      { label: 'Участок 3', zones: ['H'], value: '3,9га (388 соток)' },
+      // { label: 'Участок 3', zones: ['H'], value: '3,9га (388 соток)' },
     ],
   },
 ]

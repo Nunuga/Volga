@@ -570,49 +570,9 @@ export default function SlidePatchMap() {
           </>
         )}
 
-        {/* ✅ Нижняя панель навигации */}
-        {/* <div className="pointer-events-none absolute inset-x-0 z-[115]" style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
-          <div className="pointer-events-auto mx-auto flex w-fit items-center gap-2 rounded-2xl bg-black px-2 py-2 ring-white/14 shadow-soft">
-            <button onClick={deck.prev} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
-              ← 
-            </button> */}
-
-            {/* {editorAllowed && (
-              <button
-                onClick={() => setEditorOpen((v) => !v)}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/90 ring-1 ring-white/18 transition hover:bg-white/10"
-                title="Открыть/закрыть редактор маркеров"
-              >
-                {editorOpen ? 'Закрыть редактор' : 'Редактор'}
-              </button>
-            )} */}
-
-            {/*
-            <button
-              onClick={() => {
-                setPanelsOpen((v) => {
-                  const next = !v
-                  if (!next) {
-                    setSelectedId(null)
-                    setHoverId(null)
-                    setPopupPos(null)
-                  }
-                  return next
-                })
-              }}
-              className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/90 ring-1 ring-white/18 transition hover:bg-white/10"
-              title="Показать/скрыть нижние карточки"
-            >
-              {panelsOpen ? 'Скрыть карточки' : 'Показать карточки'} • Карта сравнения
-            </button>
-
-            <button onClick={deck.next} className="rounded-2xl px-4 py-2 text-sm font-semibold text-white/85 ring-1 ring-white/14 transition hover:bg-white/10">
-              Далее →
-            </button>
-            */}
+       
           </div>
         </div>
-    //   </div>
-    // </div>
+   
   )
 }

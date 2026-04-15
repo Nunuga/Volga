@@ -2,10 +2,12 @@ import { motion } from 'framer-motion'
 import React from 'react'
 
 /**
- * ✅ PremiumMarker
- * - Safari-safe: может срабатывать на pointerdown/mousedown/touchstart
- * - Увеличенный hit-area, чтобы клики в Safari не промахивались
- * - labelText рисуется рядом и НЕ перехватывает клики
+ * PremiumMarker
+ * Приведен к тому же премиальному стилю, что и в предыдущем модуле:
+ * - более статусный высокий pin-shape
+ * - мягкие неоновые пульсации
+ * - сохранена Safari-safe логика открытия
+ * - сохранена плашка labelText рядом
  */
 export function PremiumMarker({
   x,
@@ -33,11 +35,12 @@ export function PremiumMarker({
   onPointerMove?: (e: React.PointerEvent<SVGGElement>) => void
   onPointerUp?: (e: React.PointerEvent<SVGGElement>) => void
 }) {
-  const accent = active ? 'rgba(241, 91, 91, 0.95)' : 'rgba(91, 232, 241, 0.75)'
-  const accentSoft = active ? 'rgba(241, 91, 91, 0.45)' : 'rgba(91, 232, 241, 0.35)'
+  const accent = active ? 'rgba(255, 70, 90, 0.98)' : 'rgba(90, 255, 245, 0.92)'
+  const accentSoft = active ? 'rgba(255, 70, 90, 0.55)' : 'rgba(90, 255, 245, 0.34)'
+  const scale = active ? 1.24 : 1.14
+  const haloOpacity = active ? 0.92 : 0.58
 
-  // ✅ бейдж рядом
-  const labelW = 168
+  const labelW = Math.max(168, Math.min(260, (labelText?.length ?? 0) * 9.6 + 34))
   const labelH = 38
   const labelX = 26
   const labelY = -60
@@ -59,14 +62,12 @@ export function PremiumMarker({
   return (
     <g
       transform={`translate(${x} ${y})`}
-      // SVG pointer-events иногда капризные в Safari — явно говорим, что кликабельно
       pointerEvents="all"
       style={{
         cursor: editing ? 'grab' : 'pointer',
         touchAction: 'manipulation' as any,
       }}
       onClick={(e) => {
-        // В Safari мы открываем по pointerdown/mousedown/touchstart
         stop(e)
         if (usePointerDown) return
         fire()
@@ -88,7 +89,6 @@ export function PremiumMarker({
         stop(e)
         onPointerUp?.(e)
       }}
-      // дополнительная страховка для Safari/старых событий
       onMouseDown={(e: any) => {
         if (!usePointerDown) return
         stopAll(e)
@@ -100,88 +100,133 @@ export function PremiumMarker({
         fire()
       }}
     >
-      {/* ✅ расширенная зона клика */}
-      <circle cx={0} cy={-18} r={34} fill="rgba(0,0,0,0.001)" pointerEvents="all" />
+      <circle cx={0} cy={-28} r={40} fill="rgba(0,0,0,0.001)" pointerEvents="all" />
 
-      <circle r="2.8" fill="rgba(255,255,255,0.85)" />
-      <circle r="7.5" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.8" />
-
-      <motion.circle
-        r="16"
-        fill="none"
-        stroke={accentSoft}
-        strokeWidth="2"
-        initial={{ opacity: 0.6, scale: 0.85 }}
-        animate={{ opacity: [0.55, 0.0], scale: [0.85, 1.75] }}
-        transition={{ duration: 1.55, repeat: Infinity, ease: 'easeOut' }}
-      />
-      <motion.circle
-        r="12"
-        fill="none"
-        stroke={accent}
-        strokeWidth="1.6"
-        initial={{ opacity: 0.35, scale: 0.9 }}
-        animate={{ opacity: [0.35, 0.0], scale: [0.9, 1.45] }}
-        transition={{ duration: 1.55, repeat: Infinity, ease: 'easeOut', delay: 0.55 }}
-      />
-
-      <ellipse cx="0" cy="22" rx="15" ry="6" fill="rgba(0,0,0,0.35)" />
-
-      <g filter="url(#pinGlow)">
-        <path
-          d="M0 0 C 11 0, 18 -8, 18 -18 C 18 -30, 8 -40, 0 -40 C -8 -40, -18 -30, -18 -18 C -18 -8, -11 0, 0 0 Z"
-          fill="url(#pinBody)"
-          opacity={0.98}
-        />
-        <circle cx="0" cy="-23" r="12.5" fill="url(#pinHead)" filter="url(#pinShadow)" />
-        <circle cx="-4" cy="-28" r="4.2" fill="rgba(255,255,255,0.55)" />
+      <motion.g
+        transform={`scale(${scale})`}
+        initial={false}
+        animate={active ? { y: [0, -1.2, 0] } : { y: 0 }}
+        transition={active ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.22 }}
+      >
+        <circle r="3.1" fill="rgba(255,255,255,0.92)" />
+        <circle r="9.5" fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="2.4" />
 
         <motion.circle
-          cx="0"
-          cy="-23"
-          r="20"
+          r={active ? 28 : 24}
+          fill="none"
+          stroke={accentSoft}
+          strokeWidth="2.5"
+          initial={{ opacity: 0.85, scale: 0.55 }}
+          animate={{ opacity: [0.85, 0.0], scale: [0.55, 2.15] }}
+          transition={{ duration: active ? 0.95 : 1.25, repeat: Infinity, ease: 'easeOut' }}
+          style={{ mixBlendMode: 'screen' as any }}
+        />
+        <motion.circle
+          r={active ? 22 : 19}
           fill="none"
           stroke={accent}
-          strokeWidth="2"
-          initial={false}
-          animate={{ opacity: active ? 1 : 0.45, scale: active ? 1.06 : 1 }}
-          transition={{ duration: 0.25 }}
+          strokeWidth="2.2"
+          initial={{ opacity: 0.65, scale: 0.62 }}
+          animate={{ opacity: [0.65, 0.0], scale: [0.62, 1.92] }}
+          transition={{ duration: active ? 0.95 : 1.25, repeat: Infinity, ease: 'easeOut', delay: 0.34 }}
+          style={{ mixBlendMode: 'screen' as any }}
         />
-      </g>
+        <motion.circle
+          r={active ? 16 : 14}
+          fill="none"
+          stroke="rgba(255,255,255,0.75)"
+          strokeWidth="1.6"
+          initial={{ opacity: 0.35, scale: 0.78 }}
+          animate={{ opacity: [0.35, 0.0], scale: [0.78, 1.52] }}
+          transition={{ duration: active ? 0.95 : 1.25, repeat: Infinity, ease: 'easeOut', delay: 0.56 }}
+          style={{ mixBlendMode: 'screen' as any }}
+        />
 
-      {/* ✅ Плашка рядом — не блокирует клики по пину */}
-      {labelText ? (
-        <g transform={`translate(${labelX} ${labelY})`} pointerEvents="none">
-          <rect x={4} y={5} width={labelW} height={labelH} rx={labelH / 2} ry={labelH / 2} fill="rgba(0,0,0,0.40)" />
-          <rect
-            x={0}
-            y={0}
-            width={labelW}
-            height={labelH}
-            rx={labelH / 2}
-            ry={labelH / 2}
-            fill="rgba(8,18,28,0.82)"
-            stroke="rgba(255,255,255,0.24)"
-            strokeWidth={1.6}
+        <ellipse cx="0" cy="16" rx="18" ry="6.8" fill="rgba(0,0,0,0.28)" />
+
+        <g filter="url(#pinGlow)" opacity={0.995}>
+          <path
+            d="
+              M 0 0
+              C 18 0, 32 -14, 32 -32
+              C 32 -54, 18 -72, 0 -72
+              C -18 -72, -32 -54, -32 -32
+              C -32 -14, -18 0, 0 0
+              Z
+            "
+            fill="url(#pinBody)"
           />
-          <text
-            x={14}
-            y={26}
-            fontSize={18}
-            fontWeight={900}
-            fontFamily="ui-sans-serif"
-            fill="rgba(0,0,0,0.65)"
-            stroke="rgba(0,0,0,0.65)"
-            strokeWidth={4}
-            paintOrder="stroke"
-          >
-            {labelText}
-          </text>
-          <text x={14} y={26} fontSize={18} fontWeight={900} fontFamily="ui-sans-serif" fill="rgba(255,255,255,0.96)">
-            {labelText}
-          </text>
+
+          <circle cx="-6" cy="-52" r="5.6" fill="rgba(255,255,255,0.62)" />
+
+          <motion.circle
+            cx="0"
+            cy="-44"
+            r="9.2"
+            fill="url(#pinHead)"
+            stroke={accent}
+            strokeWidth="2.2"
+            initial={false}
+            animate={{
+              opacity: haloOpacity,
+              scale: active ? [1.0, 1.12, 1.0] : 1.0,
+            }}
+            transition={active ? { duration: 0.9, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.22 }}
+            style={{ mixBlendMode: 'screen' as any }}
+          />
+
+          <motion.path
+            d="
+              M 0 0
+              C 18 0, 32 -14, 32 -32
+              C 32 -54, 18 -72, 0 -72
+              C -18 -72, -32 -54, -32 -32
+              C -32 -14, -18 0, 0 0
+              Z
+            "
+            fill="none"
+            stroke={accent}
+            strokeWidth="2.6"
+            initial={false}
+            animate={{ opacity: active ? 0.92 : 0.55 }}
+            transition={{ duration: 0.2 }}
+            style={{ mixBlendMode: 'screen' as any }}
+          />
         </g>
-      ) : null}
+
+        {labelText ? (
+          <g transform={`translate(${labelX} ${labelY})`} pointerEvents="none">
+            <rect x={4} y={5} width={labelW} height={labelH} rx={labelH / 2} ry={labelH / 2} fill="rgba(0,0,0,0.40)" />
+            <rect
+              x={0}
+              y={0}
+              width={labelW}
+              height={labelH}
+              rx={labelH / 2}
+              ry={labelH / 2}
+              fill="rgba(8,18,28,0.84)"
+              stroke="rgba(255,255,255,0.24)"
+              strokeWidth={1.6}
+            />
+            <text
+              x={14}
+              y={26}
+              fontSize={18}
+              fontWeight={900}
+              fontFamily="ui-sans-serif"
+              fill="rgba(0,0,0,0.65)"
+              stroke="rgba(0,0,0,0.65)"
+              strokeWidth={4}
+              paintOrder="stroke"
+            >
+              {labelText}
+            </text>
+            <text x={14} y={26} fontSize={18} fontWeight={900} fontFamily="ui-sans-serif" fill="rgba(255,255,255,0.96)">
+              {labelText}
+            </text>
+          </g>
+        ) : null}
+      </motion.g>
     </g>
   )
 }

@@ -494,7 +494,7 @@ export default function SlideAerial() {
       </button>
 
       {/* Карта межевания */}
-      <TopToggleButton
+      {/* <TopToggleButton
         active={isMezh}
         onClick={() => {
           setMode((m) => (m === 'mezh' ? 'none' : 'mezh'))
@@ -505,7 +505,7 @@ export default function SlideAerial() {
         }}
       >
         Карта межевания
-      </TopToggleButton>
+      </TopToggleButton> */}
 
       {/* Потенциальные территории */}
       <div className="ml-2 flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-2 ring-1 ring-white/15">
@@ -697,25 +697,25 @@ export default function SlideAerial() {
                 }}
               >
                 <defs>
-                  <radialGradient id="pinHead" cx="30%" cy="25%" r="80%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
-                    <stop offset="35%" stopColor="rgba(165,241,91,0.95)" />
-                    <stop offset="100%" stopColor="rgba(35,160,95,0.95)" />
+                  <radialGradient id="pinHead" cx="34%" cy="28%" r="82%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
+                    <stop offset="42%" stopColor="rgba(206,255,251,0.96)" />
+                    <stop offset="100%" stopColor="rgba(108,235,225,0.92)" />
                   </radialGradient>
 
                   <linearGradient id="pinBody" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(220,255,190,0.95)" />
-                    <stop offset="55%" stopColor="rgba(91,232,241,0.70)" />
-                    <stop offset="100%" stopColor="rgba(57,26,255,0.70)" />
+                    <stop offset="0%" stopColor="rgba(240,255,255,0.96)" />
+                    <stop offset="48%" stopColor="rgba(123,255,244,0.74)" />
+                    <stop offset="100%" stopColor="rgba(67,113,255,0.68)" />
                   </linearGradient>
 
-                  <filter id="pinShadow" x="-70%" y="-70%" width="240%" height="240%">
-                    <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="rgba(0,0,0,0.35)" />
+                  <filter id="pinShadow" x="-80%" y="-80%" width="260%" height="260%">
+                    <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="rgba(0,0,0,0.32)" />
                   </filter>
 
-                  <filter id="pinGlow" x="-80%" y="-80%" width="260%" height="260%">
-                    <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="rgba(91,232,241,0.40)" />
-                    <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="rgba(165,241,91,0.25)" />
+                  <filter id="pinGlow" x="-90%" y="-90%" width="280%" height="280%">
+                    <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="rgba(90,255,245,0.36)" />
+                    <feDropShadow dx="0" dy="0" stdDeviation="12" floodColor="rgba(140,194,255,0.22)" />
                   </filter>
                 </defs>
 
@@ -798,18 +798,18 @@ export default function SlideAerial() {
                       const plotNo = ownerPlotNoByZone?.[z.id]
                       const labelText = plotNo ? `участок №${plotNo}` : undefined
 
-                      return (
-                        <PremiumMarker
-                          key={`zone-${z.id}`}
-                          x={cx}
-                          y={cy}
-                          active={activeZone === z.id}
-                          editing={false}
-                          labelText={labelText}
-                          usePointerDown={useHtmlMarkerCards}
-                          onTrigger={() => (suppressSvgClickRef.current = true)}
-                          onClick={() => openZone(z.id)}
-                        />
+                      return (<></>
+                        // <PremiumMarker
+                        //   key={`zone-${z.id}`}
+                        //   x={cx}
+                        //   y={cy}
+                        //   active={activeZone === z.id}
+                        //   editing={false}
+                        //   labelText={labelText}
+                        //   usePointerDown={useHtmlMarkerCards}
+                        //   onTrigger={() => (suppressSvgClickRef.current = true)}
+                        //   onClick={() => openZone(z.id)}
+                        // />
                       )
                     })}
                   </g>

@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useMemo } from 'react'
+import { createPortal } from 'react-dom'
+
 import type { Pin } from '../types'
 
 export default function PatchMapEditorPanel({
@@ -27,20 +29,28 @@ export default function PatchMapEditorPanel({
 }) {
   const list = useMemo(() => comparePins.filter((p) => p.variant !== 'mine'), [comparePins])
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.aside
-          className="absolute right-4 top-4 z-[140] w-[min(420px,92vw)]"
+          className="fixed right-4 top-4 z-[999999] w-[min(420px,92vw)] max-h-[calc(100vh-32px)] overflow-y-auto"
           initial={{ opacity: 0, x: 18, y: -6 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, x: 18, y: -6 }}
           transition={{ duration: 0.18 }}
           style={{ pointerEvents: 'auto' }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
           <div
             className="overflow-hidden rounded-[24px] ring-1 ring-white/15"
-            style={{ background: 'linear-gradient(135deg, rgba(12,28,44,0.92), rgba(6,14,22,0.84))', boxShadow: '0 30px 90px rgba(0,0,0,0.62)' }}
+            style={{
+              background: 'linear-gradient(135deg, rgba(12,28,44,0.92), rgba(6,14,22,0.84))',
+              boxShadow: '0 30px 90px rgba(0,0,0,0.62)',
+              backdropFilter: 'blur(16px)',
+            }}
           >
             <div className="flex items-center justify-between gap-3 px-5 py-4">
               <div className="min-w-0">
@@ -165,6 +175,7 @@ export default function PatchMapEditorPanel({
           </div>
         </motion.aside>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react"
 import type { FitBox, Quote } from "../types"
-
+import { MarkerLegend } from './MarkerLegend'
 import {
   Home,
   Sparkles,
@@ -215,7 +215,7 @@ export function SlogansInfoDock({
         style={{
           position: "absolute",
           right: pad,
-          top: "18%",
+          top: "%",
           width: dockW,
           pointerEvents: "auto",
 
@@ -304,6 +304,9 @@ export function SlogansInfoDock({
           </div>
 
         </div>
+        <div className="mt-4">
+  <MarkerLegend />
+</div>
       </div>
 
       {/* ANIMATION */}

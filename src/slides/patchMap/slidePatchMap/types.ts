@@ -7,7 +7,7 @@ export type FitBox = {
   ch: number
 }
 
-export type PinVariant = 'default' | 'mine'
+export type PinVariant = 'default' | 'mine' | 'port' | 'hotel' | 'village' | 'spa'
 
 export type Pin = {
   id: string
